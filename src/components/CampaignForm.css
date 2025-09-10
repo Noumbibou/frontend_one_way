@@ -1,0 +1,13 @@
+.campaign-form{ display:flex; flex-direction:column; gap:12px; font-family:inherit; }
+.campaign-form .row{ display:flex; flex-direction:column; gap:6px; }
+.campaign-form .two-cols{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.campaign-form input, .campaign-form textarea{ padding:10px; border-radius:8px; border:1px solid #e6eef8; background:#fff; }
+.campaign-form .switch{ display:flex; align-items:center; gap:8px; }
+.campaign-form .questions{ margin-top:8px; }
+.campaign-form .q-head{ display:flex; justify-content:space-between; align-items:center; }
+.campaign-form .question{ background:#fff; border:1px solid #eef2f7; padding:10px; border-radius:8px; margin-top:8px; }
+.campaign-form .q-meta{ display:flex; gap:8px; align-items:center; margin-top:8px; }
+.btn-add{ background:#eef6ff; border:1px solid #d6e9ff; padding:6px 10px; border-radius:8px; cursor:pointer; }
+.btn-remove{ background:#fff6f6; border:1px solid #ffdede; padding:6px 10px; border-radius:8px; cursor:pointer; }
+.actions{ margin-top:12px; display:flex; gap:8px; }
+.btn-primary{ background:#0b5ed7; color:#fff; padding:10px 14px; border-radius:8px; border:none; cursor:pointer; }

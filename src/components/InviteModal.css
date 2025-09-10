@@ -1,0 +1,9 @@
+.invite-modal-backdrop{ position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:2000;}
+.invite-modal{ width:420px;background:#fff;padding:18px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.15);position:relative;font-family:inherit;}
+.invite-modal h3{ margin:0 0 12px 0;font-size:18px;}
+.invite-modal input{ width:100%;padding:8px 10px;margin-bottom:8px;border:1px solid #e6eef8;border-radius:6px;}
+.invite-modal .modal-actions{ display:flex;gap:8px;margin-top:10px;justify-content:flex-end;}
+.invite-modal .modal-close{ position:absolute;right:8px;top:6px;background:transparent;border:none;font-size:16px;cursor:pointer;}
+.invite-modal .generated-link{ background:#f7fbff;padding:8px;border-radius:6px;border:1px solid #e6f0ff;word-break:break-all;}
+.invite-modal .error{ color:crimson;margin-top:6px;font-size:13px;}
+.invite-modal .meta{ color:#666;margin-top:6px;font-size:13px;}

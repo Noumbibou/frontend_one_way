@@ -1,13 +1,140 @@
-.campaign-form{ display:flex; flex-direction:column; gap:12px; font-family:inherit; }
-.campaign-form .row{ display:flex; flex-direction:column; gap:6px; }
-.campaign-form .two-cols{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.campaign-form input, .campaign-form textarea{ padding:10px; border-radius:8px; border:1px solid #e6eef8; background:#fff; }
-.campaign-form .switch{ display:flex; align-items:center; gap:8px; }
-.campaign-form .questions{ margin-top:8px; }
-.campaign-form .q-head{ display:flex; justify-content:space-between; align-items:center; }
-.campaign-form .question{ background:#fff; border:1px solid #eef2f7; padding:10px; border-radius:8px; margin-top:8px; }
-.campaign-form .q-meta{ display:flex; gap:8px; align-items:center; margin-top:8px; }
-.btn-add{ background:#eef6ff; border:1px solid #d6e9ff; padding:6px 10px; border-radius:8px; cursor:pointer; }
-.btn-remove{ background:#fff6f6; border:1px solid #ffdede; padding:6px 10px; border-radius:8px; cursor:pointer; }
-.actions{ margin-top:12px; display:flex; gap:8px; }
-.btn-primary{ background:#0b5ed7; color:#fff; padding:10px 14px; border-radius:8px; border:none; cursor:pointer; }
+/* CampaignForm.css - Enhanced Version */
+
+/* Glassmorphism effects */
+.glass-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+  }
+  
+  .glass-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  }
+  
+  /* Gradient buttons */
+  .gradient-btn {
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%);
+    border: none;
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-weight: 600;
+    color: #fff;
+    transition: all 0.3s ease;
+  }
+  
+  .gradient-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(251, 191, 36, 0.25);
+  }
+  
+  .gradient-btn:disabled {
+    background: linear-gradient(135deg, #cbd5e0 0%, #a0aec0 100%);
+    transform: none;
+    box-shadow: none;
+  }
+  
+  /* Form enhancements */
+  .form-group {
+    margin-bottom: 24px;
+  }
+  
+  .form-label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  
+  .form-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    background: var(--bg-card);
+    color: var(--text-primary);
+  }
+  
+  .form-input:focus {
+    outline: none;
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.15);
+  }
+  
+  /* Question list styles */
+  .question-item {
+    background: var(--bg-subtle);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
+  }
+  
+  .question-item:hover {
+    transform: translateX(4px);
+    border-color: var(--brand-primary);
+  }
+  
+  /* Animation classes */
+  .fade-in {
+    animation: fadeIn 0.6s ease-in;
+  }
+  
+  .slide-up {
+    animation: slideUp 0.4s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes slideUp {
+    from { 
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .glass-card {
+      margin: 0 -16px;
+      border-radius: 0;
+      border-left: none;
+      border-right: none;
+    }
+    
+    .form-input {
+      font-size: 14px;
+    }
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: var(--bg-subtle);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-accent) 100%);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, var(--brand-primary-dark) 0%, var(--brand-primary) 100%);
+  }

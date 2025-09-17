@@ -21,7 +21,41 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem("access_token");
     if (token) {
       api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-      setUser({ authenticated: true });
+      // Try to restore user info from localStorage if available
+      try {
+        const stored = localStorage.getItem("user_info");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setUser({ ...parsed, authenticated: true });
+          if (!parsed.first_name) {
+            (async () => {
+              try {
+                const profile = await fetchProfile();
+                if (profile) {
+                  const nextUser = { ...parsed, ...profile, authenticated: true };
+                  setUser(nextUser);
+                  try { localStorage.setItem("user_info", JSON.stringify(nextUser)); } catch (_) {}
+                }
+              } catch (_) {}
+            })();
+          }
+        } else {
+          // No stored user object; set auth flag and try to fetch profile to enrich user data
+          setUser({ authenticated: true });
+          (async () => {
+            try {
+              const profile = await fetchProfile();
+              if (profile) {
+                const nextUser = { ...profile, authenticated: true };
+                setUser(nextUser);
+                try { localStorage.setItem("user_info", JSON.stringify(nextUser)); } catch (_) {}
+              }
+            } catch (_) {}
+          })();
+        }
+      } catch (_) {
+        setUser({ authenticated: true });
+      }
       setLoading(false);
     } else {
       setLoading(false);
@@ -37,8 +71,29 @@ export const AuthProvider = ({ children }) => {
       const access = payload.access || payload.token || payload.access_token;
       const refresh = payload.refresh || payload.refresh_token;
       setTokensAndHeader(access, refresh);
-      if (payload.user) setUser(payload.user);
-      else setUser({ authenticated: true });
+      // Build a user object from payload to ensure profile fields are available in the app
+      const nextUser = {
+        username: payload.username || "",
+        role: payload.role || "",
+        email: payload.email || "",
+        company: payload.company || "",
+        first_name: payload.first_name || payload.firstName || "",
+        last_name: payload.last_name || payload.lastName || "",
+        name: payload.name || "",
+        authenticated: true,
+      };
+      // Try to enrich with profile endpoint if first_name is missing
+      let enriched = nextUser;
+      if (!nextUser.first_name) {
+        try {
+          const profile = await fetchProfile();
+          if (profile) {
+            enriched = { ...enriched, ...profile };
+          }
+        } catch (_) {}
+      }
+      setUser(enriched);
+      try { localStorage.setItem("user_info", JSON.stringify(enriched)); } catch (_) {}
       return;
     } catch (err) {
       // fallback to token endpoint (email -> username)
@@ -51,12 +106,49 @@ export const AuthProvider = ({ children }) => {
         }
         const { access, refresh } = res.data;
         setTokensAndHeader(access, refresh);
-        setUser({ authenticated: true });
+        // We don't have profile fields here; keep minimal but persist empty user_info
+        // Try to fetch profile to populate names
+        let nextUser = { authenticated: true };
+        try {
+          const profile = await fetchProfile();
+          if (profile) nextUser = { ...profile, authenticated: true };
+        } catch (_) {}
+        setUser(nextUser);
+        try { localStorage.setItem("user_info", JSON.stringify(nextUser)); } catch (_) {}
         return;
       } catch (e) {
         throw err;
       }
     }
+  };
+
+  // Attempts to fetch the current user's profile from common endpoints
+  const fetchProfile = async () => {
+    const endpoints = [
+      "auth/me/",
+      "users/me/",
+      "auth/user/",
+      "profile/",
+    ];
+    for (const ep of endpoints) {
+      try {
+        const res = await api.get(ep);
+        const p = res?.data || {};
+        // Normalize keys
+        return {
+          username: p.username || "",
+          email: p.email || "",
+          role: p.role || p.user_type || "",
+          company: p.company || "",
+          first_name: p.first_name || p.firstName || "",
+          last_name: p.last_name || p.lastName || "",
+          name: p.name || "",
+        };
+      } catch (_) {
+        // try next endpoint
+      }
+    }
+    return null;
   };
 
   // register: include department for hiring_manager and candidate fields explicitly
@@ -104,6 +196,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
+    localStorage.removeItem("user_info");
     delete api.defaults.headers.common["Authorization"];
     setUser(null);
     nav("/login");

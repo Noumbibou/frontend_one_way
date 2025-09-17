@@ -1,12 +1,14 @@
-﻿import React from "react";
+import React from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import "./Header.css";
+import { useThemeApp } from "../contexts/ThemeContext";
 
 export default function Header({ title, children, showUser = true, showNavigation = false }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { mode, toggleTheme } = useThemeApp();
 
   const handleLogout = () => {
     logout();
@@ -57,6 +59,17 @@ export default function Header({ title, children, showUser = true, showNavigatio
 
         {/* Actions et utilisateur */}
         <div className="header__actions">
+          {/* Theme toggle */}
+          <button
+            className="header__nav-item"
+            title={mode === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
+            onClick={toggleTheme}
+          >
+            <span className="header__nav-icon" aria-hidden>
+              {mode === 'dark' ? '🌞' : '🌙'}
+            </span>
+            <span className="header__nav-label">{mode === 'dark' ? 'Clair' : 'Sombre'}</span>
+          </button>
           {/* Bouton "Nouvelle campagne" — utilise les classes de navigation pour conserver le design */}
           {showNavigation && (
             <button
@@ -78,16 +91,9 @@ export default function Header({ title, children, showUser = true, showNavigatio
           {/* Informations utilisateur */}
           {showUser && user && (
             <div className="header__user">
-              <div className="header__user-info">
-                <span className="header__user-name">
-                  {user.name || user.email || "Utilisateur"}
-                </span>
-                <span className="header__user-role">
-                  {user.user_type === "hiring_manager" ? "Recruteur" : "Candidat"}
-                </span>
-              </div>
+
               <div className="header__user-avatar">
-                {user.name ? user.name.charAt(0).toUpperCase() : "U"}
+                {user.username ? user.username.charAt(0).toUpperCase() : "U"}
               </div>
               <div className="header__user-menu">
                 <button className="header__menu-trigger">

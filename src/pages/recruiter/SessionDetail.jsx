@@ -1,43 +1,112 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, Grid, Paper, Rating, TextField, Button, Card, CardContent, CardMedia, Tabs, Tab, Divider, IconButton, CircularProgress, TableCell } from '@mui/material';
-import { PlayArrow, Pause, SkipPrevious, SkipNext, CheckCircle, Cancel, ThumbUp, ThumbDown } from '@mui/icons-material';
+import { 
+  Box, Typography, Grid, Paper, Rating, TextField, Button, Card, 
+  CardContent, Tabs, Tab, Divider, IconButton, CircularProgress,
+  Chip, Avatar, LinearProgress, Tooltip, Fade
+} from '@mui/material';
+import { 
+  PlayArrow, Pause, SkipPrevious, SkipNext, CheckCircle, Cancel, 
+  ThumbUp, ThumbDown, Person, Email, Phone, LinkedIn, 
+  Assessment, VideoLibrary, Star, Notes
+} from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
+// Styles personnalisés (full‑dark + glass)
+const GradientPaper = styled(Paper)(({ theme }) => ({
+  background: 'var(--bg-subtle)',
+  color: 'var(--text-primary)',
+  padding: theme.spacing(3),
+  borderRadius: '20px',
+  marginBottom: theme.spacing(4),
+  border: theme.palette.mode === 'dark' ? '1px solid #ffffff' : '1px solid var(--border-color)',
+  position: 'relative'
+}));
+
 const StyledRating = styled(Rating)({
   '& .MuiRating-iconFilled': {
-    color: '#3f51b5',
+    color: '#ff6b35',
   },
   '& .MuiRating-iconHover': {
-    color: '#303f9f',
+    color: '#ff8c66',
   },
 });
 
+const GlassCard = styled(Card)(({ theme }) => ({
+  background: 'var(--bg-subtle)',
+  borderRadius: '20px',
+  border: theme.palette.mode === 'dark' ? '1px solid #ffffff' : '1px solid var(--border-color)',
+  boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+  transition: 'all 0.3s ease',
+  color: 'var(--text-on-card)',
+  '&:hover': theme.palette.mode === 'dark'
+    ? { /* disable hover effects in dark mode */ }
+    : {
+        transform: 'translateY(-4px)',
+        boxShadow: '0 12px 40px rgba(0,0,0,0.3)',
+      },
+}));
+
+const NavigationButton = styled(IconButton)(({ theme }) => ({
+  background: 'var(--gradient-violet)',
+  color: 'white',
+  '&:hover': {
+    background: 'var(--gradient-violet-strong)',
+    transform: 'scale(1.1)',
+  },
+  '&:disabled': {
+    background: 'var(--bg-subtle)',
+    color: 'var(--text-secondary)',
+  },
+}));
+
 const VideoPlayer = ({ src, autoPlay = false, controls = true }) => {
-  // Construire l'URL complète si c'est un chemin relatif
   const getVideoUrl = () => {
     if (!src) return null;
-    // Si c'est déjà une URL complète (commence par http ou /)
     if (typeof src === 'string' && (src.startsWith('http') || src.startsWith('/'))) {
       return src;
     }
-    // Sinon, construire l'URL complète en supposant que c'est un chemin relatif
     return `http://localhost:8000${src.startsWith('/') ? '' : '/'}${src}`;
   };
 
   const videoUrl = getVideoUrl();
   
-  if (!videoUrl) return <Box p={2}>Aucune vidéo disponible</Box>;
+  if (!videoUrl) return (
+    <Box sx={{ 
+      width: '100%', 
+      height: '400px', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      background: 'linear-gradient(135deg, var(--bg-body) 0%, var(--bg-subtle) 100%)',
+      borderRadius: '16px'
+    }}>
+      <Typography variant="h6" color="textSecondary">
+        Aucune vidéo disponible
+      </Typography>
+    </Box>
+  );
   
   return (
-    <Box sx={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
+    <Box sx={{ 
+      width: '100%', 
+      maxWidth: '800px', 
+      margin: '0 auto',
+      borderRadius: '16px',
+      overflow: 'hidden',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)'
+    }}>
       <video
-        key={videoUrl} // Ajout d'une clé pour forcer le rechargement de la vidéo
+        key={videoUrl}
         controls={controls}
         autoPlay={autoPlay}
-        style={{ width: '100%', borderRadius: '8px' }}
+        style={{ 
+          width: '100%', 
+          height: '400px',
+          objectFit: 'cover'
+        }}
       >
         <source src={videoUrl} type="video/mp4" />
         Votre navigateur ne supporte pas la lecture de vidéos.
@@ -47,10 +116,6 @@ const VideoPlayer = ({ src, autoPlay = false, controls = true }) => {
 };
 
 const EvaluationForm = ({ videoResponse, onEvaluationSaved }) => {
-  console.log('[DEBUG] videoResponse:', videoResponse);
-  console.log('[DEBUG] videoResponse.evaluations:', videoResponse?.evaluations);
-  console.log('[DEBUG] evaluations length:', videoResponse?.evaluations?.length);
-  
   const [evaluation, setEvaluation] = useState({
     video_response: videoResponse?.id || null,
     technical_skill: 0,
@@ -64,37 +129,40 @@ const EvaluationForm = ({ videoResponse, onEvaluationSaved }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // Charger une évaluation existante si elle existe
-    if (videoResponse?.evaluations?.length > 0) {
-      const existingEval = videoResponse.evaluations[0];
-      setEvaluation({
+    if (videoResponse?.id) {
+      let next = {
         video_response: videoResponse.id,
-        technical_skill: existingEval.technical_skill || 0,
-        communication: existingEval.communication || 0,
-        motivation: existingEval.motivation || 0,
-        cultural_fit: existingEval.cultural_fit || 0,
-        notes: existingEval.notes || '',
-        recommended: existingEval.recommended
-      });
+        technical_skill: 0,
+        communication: 0,
+        motivation: 0,
+        cultural_fit: 0,
+        notes: '',
+        recommended: null,
+      };
+
+      if (videoResponse?.evaluations?.length > 0) {
+        const existingEval = videoResponse.evaluations[0];
+        next = {
+          ...next,
+          technical_skill: existingEval.technical_skill || 0,
+          communication: existingEval.communication || 0,
+          motivation: existingEval.motivation || 0,
+          cultural_fit: existingEval.cultural_fit || 0,
+          notes: existingEval.notes || '',
+          recommended: existingEval.recommended,
+        };
+      }
+
+      setEvaluation(next);
     }
   }, [videoResponse]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Vérifier si une évaluation existe déjà
-    if (videoResponse?.evaluations?.length > 0) {
-      toast.warning("Vous avez déjà évalué cette réponse.");
-      return;
-    }
-    
     setIsSubmitting(true);
     
     try {
-      // Créer une copie de l'évaluation
       const evaluationToSubmit = { ...evaluation };
-      
-      // Arrondir les valeurs décimales des notes
       const ratingFields = ['technical_skill', 'communication', 'motivation', 'cultural_fit'];
       ratingFields.forEach(field => {
         if (evaluationToSubmit[field] !== null && evaluationToSubmit[field] !== undefined) {
@@ -103,20 +171,13 @@ const EvaluationForm = ({ videoResponse, onEvaluationSaved }) => {
         }
       });
       
-      console.log("[DEBUG] Données d'évaluation à envoyer (après arrondi):", evaluationToSubmit);
-      
-      // Vérifications des champs obligatoires
       if (!evaluationToSubmit.video_response) {
-        console.error("[ERROR] Aucune réponse vidéo sélectionnée");
         toast.error("Aucune réponse vidéo sélectionnée");
-        setIsSubmitting(false);
         return;
       }
 
       if (evaluationToSubmit.recommended === undefined || evaluationToSubmit.recommended === null) {
-        console.error("[ERROR] Le champ 'recommended' est requis");
         toast.error("Veuillez indiquer si vous recommandez ce candidat");
-        setIsSubmitting(false);
         return;
       }
 
@@ -128,32 +189,19 @@ const EvaluationForm = ({ videoResponse, onEvaluationSaved }) => {
       ].some(rating => rating !== undefined && rating !== null);
 
       if (!hasRating) {
-        console.error("[ERROR] Au moins une note est requise");
         toast.error("Veuillez renseigner au moins une note");
-        setIsSubmitting(false);
         return;
       }
 
-      // Création d'une nouvelle évaluation
-      console.log("[DEBUG] Envoi de la création de l'évaluation au serveur...");
       await api.post('evaluations/', evaluationToSubmit);
-      
-      console.log("[DEBUG] Réponse du serveur reçue");
-      
-      // Mettre à jour l'état local avec la nouvelle évaluation
       onEvaluationSaved();
       toast.success("Évaluation enregistrée avec succès!");
       
     } catch (error) {
-      console.error("[ERROR] Erreur lors de la sauvegarde de l'évaluation:", error);
-      
-      // Afficher les détails de l'erreur s'ils sont disponibles
       const errorMessage = error.response?.data?.detail || 
                          error.response?.data?.message || 
                          error.message ||
                          'Une erreur est survenue lors de la sauvegarde de l\'évaluation';
-      
-      console.error("[ERROR] Détails de l'erreur:", error.response?.data);
       toast.error(`Erreur: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
@@ -171,7 +219,7 @@ const EvaluationForm = ({ videoResponse, onEvaluationSaved }) => {
   };
 
   return (
-    <Paper elevation={3} sx={{ p: 3, mb: 3, position: 'relative' }}>
+    <GlassCard sx={{ p: 3, mb: 3, position: 'relative' }}>
       {videoResponse?.evaluations?.length > 0 && (
         <Box 
           sx={{
@@ -179,15 +227,15 @@ const EvaluationForm = ({ videoResponse, onEvaluationSaved }) => {
             top: 0,
             left: 0,
             right: 0,
-            backgroundColor: 'warning.light',
-            color: 'warning.contrastText',
+            background: 'linear-gradient(135deg, #ffd89b 0%, #19547b 100%)',
+            color: 'white',
             p: 1.5,
             textAlign: 'center',
-            borderRadius: '4px 4px 0 0'
+            borderRadius: '20px 20px 0 0'
           }}
         >
-          <Typography variant="subtitle2">
-            Vous avez déjà évalué cette réponse
+          <Typography variant="subtitle2" fontWeight="600">
+            ✓ Vous avez déjà évalué cette réponse
           </Typography>
         </Box>
       )}
@@ -195,109 +243,123 @@ const EvaluationForm = ({ videoResponse, onEvaluationSaved }) => {
       <form onSubmit={handleSubmit}>
         <Grid container spacing={3} sx={{ mt: videoResponse?.evaluations?.length > 0 ? 4 : 0 }}>
           <Grid item xs={12}>
-            <Typography variant="h6" gutterBottom>
-              Évaluer la réponse
-            </Typography>
+            <Box display="flex" alignItems="center" gap={1} mb={2}>
+              <Assessment sx={{ color: 'primary.main' }} />
+              <Typography variant="h6" fontWeight="600">
+                Évaluation de la réponse
+              </Typography>
+            </Box>
             <Divider sx={{ my: 2 }} />
           </Grid>
 
           <Grid item xs={12} md={6}>
-            <Box mb={2}>
-              <Typography component="legend">Compétences techniques</Typography>
-              <StyledRating
-                value={evaluation.technical_skill}
-                onChange={(_, value) => handleRatingChange('technical_skill', value)}
-                precision={0.5}
-              />
-            </Box>
-            <Box mb={2}>
-              <Typography component="legend">Communication</Typography>
-              <StyledRating
-                value={evaluation.communication}
-                onChange={(_, value) => handleRatingChange('communication', value)}
-                precision={0.5}
-              />
-            </Box>
+            {[
+              { label: "Compétences techniques", field: "technical_skill" },
+              { label: "Communication", field: "communication" },
+              { label: "Motivation", field: "motivation" },
+              { label: "Ajustement culturel", field: "cultural_fit" }
+            ].map((item, index) => (
+              <Box key={item.field} mb={3}>
+                <Typography component="legend" fontWeight="500" mb={1}>
+                  {item.label}
+                </Typography>
+                <StyledRating
+                  value={evaluation[item.field]}
+                  onChange={(_, value) => handleRatingChange(item.field, value)}
+                  precision={0.5}
+                  size="large"
+                />
+              </Box>
+            ))}
           </Grid>
+
           <Grid item xs={12} md={6}>
-            <Box mb={2}>
-              <Typography component="legend">Motivation</Typography>
-              <StyledRating
-                value={evaluation.motivation}
-                onChange={(_, value) => handleRatingChange('motivation', value)}
-                precision={0.5}
-              />
-            </Box>
-            <Box mb={2}>
-              <Typography component="legend">Ajustement culturel</Typography>
-              <StyledRating
-                value={evaluation.cultural_fit}
-                onChange={(_, value) => handleRatingChange('cultural_fit', value)}
-                precision={0.5}
-              />
-            </Box>
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Notes complémentaires"
-              multiline
-              rows={4}
-              variant="outlined"
-              value={evaluation.notes}
-              onChange={(e) => handleRatingChange('notes', e.target.value)}
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <Box display="flex" alignItems="center" gap={2} mb={2}>
-              <Typography>Recommandation :</Typography>
-              <Button
-                variant={evaluation.recommended === true ? "contained" : "outlined"}
-                color="success"
-                startIcon={<ThumbUp />}
-                onClick={() => handleRatingChange('recommended', true)}
-              >
-                Favorable
-              </Button>
-              <Button
-                variant={evaluation.recommended === false ? "contained" : "outlined"}
-                color="error"
-                startIcon={<ThumbDown />}
-                onClick={() => handleRatingChange('recommended', false)}
-              >
-                Défavorable
-              </Button>
-            </Box>
-          </Grid>
-          <Grid item xs={12}>
-            <Box display="flex" justifyContent="space-between" alignItems="center">
-              <Typography variant="h6">
-                Note moyenne: <strong>{calculateAverage()}/5</strong>
+            <Box mb={3}>
+              <Typography fontWeight="500" mb={2}>
+                Recommandation :
               </Typography>
-              <Button
-                type="submit"
-                variant="contained"
-                color="primary"
-                disabled={isSubmitting || (videoResponse?.evaluations?.length > 0)}
-                startIcon={isSubmitting ? <CircularProgress size={20} /> : <CheckCircle />}
+              <Box display="flex" gap={2} flexWrap="wrap">
+                <Button
+                  variant={evaluation.recommended === true ? "contained" : "outlined"}
+                  color="success"
+                  startIcon={<ThumbUp />}
+                  onClick={() => handleRatingChange('recommended', true)}
+                  sx={{ borderRadius: '12px', px: 3 }}
+                >
+                  Favorable
+                </Button>
+                <Button
+                  variant={evaluation.recommended === false ? "contained" : "outlined"}
+                  color="error"
+                  startIcon={<ThumbDown />}
+                  onClick={() => handleRatingChange('recommended', false)}
+                  sx={{ borderRadius: '12px', px: 3 }}
+                >
+                  Défavorable
+                </Button>
+              </Box>
+            </Box>
+
+            <Box mb={3}>
+              <Typography fontWeight="500" mb={1}>
+                Notes complémentaires
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                rows={4}
+                variant="outlined"
+                value={evaluation.notes}
+                onChange={(e) => handleRatingChange('notes', e.target.value)}
+                placeholder="Partagez vos observations sur cette réponse..."
                 sx={{
-                  '&:disabled': {
-                    backgroundColor: 'grey.300',
-                    color: 'grey.500',
-                  },
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '12px',
+                  }
                 }}
-              >
-                {isSubmitting 
-                  ? 'Enregistrement...' 
-                  : videoResponse?.evaluations?.length > 0 
-                    ? 'Déjà évaluée' 
-                    : 'Enregistrer l\'évaluation'}
-              </Button>
+              />
+            </Box>
+          </Grid>
+
+          <Grid item xs={12}>
+            <Box p={2} sx={{
+              background: 'var(--bg-subtle)',
+              borderRadius: '16px'
+            }}>
+              <Box display="flex" justifyContent={{ xs: 'center', md: 'space-between' }} alignItems="center" flexWrap="wrap" gap={2}>
+                <Box textAlign={{ xs: 'center', md: 'left' }}>
+                  <Typography variant="body2" color="textSecondary">
+                    Note moyenne
+                  </Typography>
+                  <Typography variant="h5" fontWeight="700" color="primary.main">
+                    {calculateAverage()}/5
+                  </Typography>
+                </Box>
+                <Box ml="auto">
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={isSubmitting}
+                    startIcon={isSubmitting ? <CircularProgress size={20} /> : <CheckCircle />}
+                    sx={{
+                      borderRadius: '12px',
+                      px: 4,
+                      py: 1.5,
+                      fontSize: '1rem',
+                      backgroundColor: '#000',
+                      color: '#fff',
+                      '&:hover': { filter: 'brightness(0.9)' }
+                    }}
+                  >
+                    {isSubmitting ? 'Enregistrement...' : 'Sauvegarder'}
+                  </Button>
+                </Box>
+              </Box>
             </Box>
           </Grid>
         </Grid>
       </form>
-    </Paper>
+    </GlassCard>
   );
 };
 
@@ -318,6 +380,7 @@ const SessionDetail = () => {
         setCurrentResponseIndex(0);
       } catch (error) {
         console.error('Erreur lors du chargement de la session:', error);
+        toast.error('Erreur lors du chargement de la session');
       } finally {
         setIsLoading(false);
       }
@@ -343,22 +406,10 @@ const SessionDetail = () => {
   };
 
   const handleEvaluationSaved = async () => {
-    console.log('handleEvaluationSaved called');
     try {
-      console.log('Fetching updated session data...');
       const response = await api.get(`sessions/${id}/`);
-      console.log('Updated session data:', response.data);
-      
-      // Vérifier si les réponses sont bien présentes
-      if (response.data.responses) {
-        console.log('Responses in updated data:', response.data.responses);
-        response.data.responses.forEach((resp, idx) => {
-          console.log(`Response ${idx + 1} evaluations:`, resp.evaluations);
-        });
-      }
-      
       setSession(response.data);
-      console.log('Session state updated');
+      toast.success('Évaluation mise à jour avec succès!');
     } catch (error) {
       console.error('Erreur lors du rechargement des données:', error);
     }
@@ -366,75 +417,161 @@ const SessionDetail = () => {
 
   if (isLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-        <CircularProgress />
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="70vh">
+        <Box textAlign="center">
+          <CircularProgress size={60} thickness={4} sx={{ color: 'var(--brand-primary)', mb: 2 }} />
+          <Typography variant="h6" color="textSecondary">
+            Chargement de la session...
+          </Typography>
+        </Box>
       </Box>
     );
   }
 
   if (!session) {
     return (
-      <Box p={3}>
-        <Typography variant="h6">Session introuvable</Typography>
+      <Box p={3} textAlign="center">
+        <Typography variant="h4" color="error" gutterBottom>
+          Session introuvable
+        </Typography>
+        <Button variant="contained" onClick={() => navigate(-1)}>
+          Retour
+        </Button>
       </Box>
     );
   }
 
   const currentResponse = session.responses?.[currentResponseIndex] || null;
   const hasMultipleResponses = session.responses?.length > 1;
+  const totalEvaluated = session.responses?.filter(r => r.evaluations?.length > 0).length || 0;
+  const progressPercentage = session.responses?.length ? (totalEvaluated / session.responses.length) * 100 : 0;
 
   return (
-    <Box p={3}>
-      <Box mb={4}>
-        <Typography variant="h4" gutterBottom>
-          Évaluation du candidat
-        </Typography>
-        <Typography variant="subtitle1" color="textSecondary">
-          {session.candidate_name || session.candidate?.email} - {session.campaign?.title}
-        </Typography>
-      </Box>
+    <Box className="no-hover-effects" sx={{ p: 3, background: 'var(--bg-body)', minHeight: '100vh', color: 'var(--text-primary)' }}>
+      {session.status === 'cancelled' && (
+        <Paper elevation={0} sx={{ mb: 2, p: 2, borderRadius: '12px', border: '1px solid', borderColor: 'warning.light', background: 'rgba(255, 193, 7, 0.08)' }}>
+          <Typography variant="body2" color="warning.dark" fontWeight={600}>
+            Cette session a été annulée (lien expiré/invalide et réponses incomplètes)
+          </Typography>
+        </Paper>
+      )}
+      {session.status === 'expired' && (
+        <Paper elevation={0} sx={{ mb: 2, p: 2, borderRadius: '12px', border: '1px solid', borderColor: 'error.light', background: 'rgba(244, 67, 54, 0.08)' }}>
+          <Typography variant="body2" color="error.dark" fontWeight={600}>
+            Cette session a expiré. Les évaluations sont désactivées.
+          </Typography>
+        </Paper>
+      )}
+      {/* Header Section */}
+      <GradientPaper>
+        <Box display="flex" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={3}>
+          <Box>
+            <Typography variant="h4" fontWeight="700" gutterBottom sx={{ color: 'var(--text-primary)' }}>
+              Évaluation du Candidat
+            </Typography>
+            <Typography variant="subtitle1" sx={{ opacity: 0.9, color: 'var(--text-primary)' }}>
+              {session.candidate_name || session.candidate?.email}
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.9, color: 'var(--text-primary)' }}>
+              {session.campaign?.title}
+            </Typography>
+          </Box>
+          
+          <Box textAlign="right">
+            {(() => {
+              const map = {
+                completed: { label: 'Terminé', color: 'success' },
+                cancelled: { label: 'Annulé', color: 'error' },
+                expired:   { label: 'Expiré', color: 'error' },
+                in_progress: { label: 'En cours', color: 'warning' },
+                invited: { label: 'Invité', color: 'default' },
+              };
+              const s = String(session.status || '').toLowerCase();
+              const cfg = map[s] || { label: s || '—', color: 'default' };
+              return (
+                <Chip
+                  label={cfg.label}
+                  color={cfg.color}
+                  sx={{ fontSize: '1rem', px: 2, py: 1, fontWeight: '600' }}
+                />
+              );
+            })()}
+            <Typography variant="body2" sx={{ mt: 1, opacity: 0.9, color: 'var(--text-primary)' }}>
+              Progression: {totalEvaluated}/{session.responses?.length} réponses évaluées
+            </Typography>
+            <LinearProgress 
+              variant="determinate" 
+              value={progressPercentage} 
+              sx={{ 
+                mt: 1, 
+                height: 8, 
+                borderRadius: 4,
+                backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                '& .MuiLinearProgress-bar': {
+                  background: 'var(--gradient-blue)'
+                }
+              }}
+            />
+          </Box>
+        </Box>
+      </GradientPaper>
 
-      <Tabs
-        value={activeTab}
-        onChange={handleTabChange}
-        indicatorColor="primary"
-        textColor="primary"
-        sx={{ mb: 3 }}
-      >
-        <Tab label="Visionnage des réponses" />
-        <Tab label="Résumé des évaluations" />
-      </Tabs>
+      {/* Tabs Section */}
+      <Paper sx={{ mb: 3, borderRadius: '16px', overflow: 'hidden', background: 'var(--bg-subtle)', border: '1px solid var(--border-color)' }}>
+        <Tabs
+          value={activeTab}
+          onChange={handleTabChange}
+          indicatorColor="primary"
+          textColor="primary"
+          variant="fullWidth"
+        >
+          <Tab 
+            icon={<VideoLibrary />} 
+            label="Visionnage des réponses" 
+            sx={{ fontSize: '1rem', py: 2 }}
+          />
+          <Tab 
+            icon={<Assessment />} 
+            label="Résumé des évaluations" 
+            sx={{ fontSize: '1rem', py: 2 }}
+          />
+        </Tabs>
+      </Paper>
 
       {activeTab === 0 ? (
         <Grid container spacing={3}>
-          <Grid item xs={12} md={8}>
-            <Card>
+          {/* Main Content Column */}
+          <Grid item xs={12} lg={8}>
+            {/* Video Player Card */}
+            <GlassCard>
               <CardContent>
                 {currentResponse ? (
                   <>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                      <Typography variant="h6">
-                        Question {currentResponseIndex + 1} sur {session.responses.length}
-                      </Typography>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
                       <Box>
-                        <IconButton 
+                        <Typography variant="h6" fontWeight="600" gutterBottom>
+                          Question {currentResponseIndex + 1} sur {session.responses.length}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'var(--text-primary)' }}>
+                          {currentResponse.question_text}
+                        </Typography>
+                      </Box>
+                      
+                      <Box display="flex" gap={1}>
+                        <NavigationButton 
                           onClick={handlePrevResponse} 
                           disabled={currentResponseIndex === 0}
                         >
                           <SkipPrevious />
-                        </IconButton>
-                        <IconButton 
+                        </NavigationButton>
+                        <NavigationButton 
                           onClick={handleNextResponse} 
                           disabled={currentResponseIndex === session.responses.length - 1}
                         >
                           <SkipNext />
-                        </IconButton>
+                        </NavigationButton>
                       </Box>
                     </Box>
-                    
-                    <Typography variant="subtitle1" paragraph>
-                      <strong>Question :</strong> {currentResponse.question_text}
-                    </Typography>
                     
                     <Box mb={3}>
                       <VideoPlayer 
@@ -444,225 +581,279 @@ const SessionDetail = () => {
                       />
                     </Box>
                     
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                      <Typography variant="body2" color="textSecondary">
-                        Durée : {currentResponse.duration} secondes
-                      </Typography>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+                      <Chip
+                        icon={<PlayArrow />}
+                        label={`Durée: ${currentResponse.duration}s`}
+                        variant="outlined"
+                      />
+                      
                       {currentResponse.evaluations?.length > 0 && (
-                        <Box display="flex" alignItems="center">
-                          <Typography variant="body2" sx={{ mr: 1 }}>
-                            Évalué par : {currentResponse.evaluations[0].hiring_manager_name}
-                          </Typography>
-                          <Typography variant="caption" color="success.main">
-                            Évalué
-                          </Typography>
-                          <Typography variant="body2" sx={{ ml: 1 }}>
-                            ({currentResponse.evaluations[0].overall_score}/5)
+                        <Box display="flex" alignItems="center" gap={1}>
+                          <Chip
+                            icon={<CheckCircle />}
+                            label="Évalué"
+                            color="success"
+                            variant="filled"
+                          />
+                          <Typography variant="body2" sx={{ color: 'var(--text-primary)' }}>
+                            Par {currentResponse.evaluations[0].hiring_manager_name}
                           </Typography>
                         </Box>
                       )}
                     </Box>
                   </>
                 ) : (
-                  <Typography>Aucune réponse disponible pour cette session.</Typography>
+                  <Box textAlign="center" py={6}>
+                    <VideoLibrary sx={{ fontSize: 60, color: 'var(--text-primary)', mb: 2 }} />
+                    <Typography variant="h6" sx={{ color: 'var(--text-primary)' }}>
+                      Aucune réponse disponible
+                    </Typography>
+                  </Box>
                 )}
               </CardContent>
-            </Card>
+            </GlassCard>
 
-            {currentResponse && (
+            {/* Evaluation Form */}
+            {currentResponse && (session.status === 'cancelled' || session.status === 'expired') ? (
+              <GlassCard sx={{ p: 3, mb: 3 }}>
+                <Typography variant="body2" sx={{ color: 'var(--text-on-card)' }}>
+                  L'évaluation est désactivée pour cette session ({session.status}).
+                </Typography>
+              </GlassCard>
+            ) : currentResponse ? (
               <EvaluationForm 
                 videoResponse={currentResponse} 
                 onEvaluationSaved={handleEvaluationSaved} 
               />
-            )}
+            ) : null}
           </Grid>
 
-          <Grid item xs={12} md={4}>
-            <Card>
+          {/* Sidebar Column */}
+          <Grid item xs={12} lg={4}>
+            {/* Candidate Info Card */}
+            <GlassCard sx={{ mb: 3 }}>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Détails du candidat
+                <Typography variant="h6" fontWeight="600" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'var(--text-on-card)' }}>
+                  <Person /> Informations du Candidat
                 </Typography>
-                <Box mb={2}>
-                  <Typography variant="subtitle2">Nom complet</Typography>
-                  <Typography variant="body1">
+                
+                <Box sx={{ mb: 2 }}>
+                  <Box display="flex" alignItems="center" gap={1} mb={1}>
+                    <Person sx={{ color: 'primary.main' }} />
+                    <Typography variant="body2" fontWeight="500">Nom complet</Typography>
+                  </Box>
+                  <Typography variant="body1" sx={{ color: 'var(--text-on-card)' }}>
                     {session.candidate_name || 'Non spécifié'}
                   </Typography>
                 </Box>
-                <Box mb={2}>
-                  <Typography variant="subtitle2">Email</Typography>
-                  <Typography variant="body1">
+
+                <Box sx={{ mb: 2 }}>
+                  <Box display="flex" alignItems="center" gap={1} mb={1}>
+                    <Email sx={{ color: 'primary.main' }} />
+                    <Typography variant="body2" fontWeight="500">Email</Typography>
+                  </Box>
+                  <Typography variant="body1" sx={{ color: 'var(--text-on-card)' }}>
                     {session.candidate?.email || 'Non spécifié'}
                   </Typography>
                 </Box>
-                <Box mb={2}>
-                  <Typography variant="subtitle2">Téléphone</Typography>
-                  <Typography variant="body1">
+
+                <Box sx={{ mb: 2 }}>
+                  <Box display="flex" alignItems="center" gap={1} mb={1}>
+                    <Phone sx={{ color: 'primary.main' }} />
+                    <Typography variant="body2" fontWeight="500">Téléphone</Typography>
+                  </Box>
+                  <Typography variant="body1" sx={{ color: 'var(--text-on-card)' }}>
                     {session.candidate?.phone || 'Non spécifié'}
                   </Typography>
                 </Box>
+
                 {session.candidate?.linkedin_url && (
-                  <Box mb={2}>
-                    <Typography variant="subtitle2">Profil LinkedIn</Typography>
-                    <a 
-                      href={session.candidate.linkedin_url} 
-                      target="_blank" 
+                  <Box>
+                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                      <LinkedIn sx={{ color: 'primary.main' }} />
+                      <Typography variant="body2" fontWeight="500">LinkedIn</Typography>
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      href={session.candidate.linkedin_url}
+                      target="_blank"
                       rel="noopener noreferrer"
-                      style={{ color: '#1976d2', textDecoration: 'none' }}
+                      startIcon={<LinkedIn />}
+                      sx={{ borderRadius: '12px' }}
                     >
                       Voir le profil
-                    </a>
+                    </Button>
                   </Box>
                 )}
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle2">Statut de la session</Typography>
-                <Box 
-                  sx={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    bgcolor: session.status === 'completed' ? '#e8f5e9' : '#fff8e1',
-                    color: session.status === 'completed' ? '#2e7d32' : '#f57f17',
-                    px: 1.5,
-                    py: 0.5,
-                    borderRadius: 1,
-                    mt: 1
-                  }}
-                >
-                  {session.status === 'completed' ? (
-                    <>
-                      <CheckCircle fontSize="small" sx={{ mr: 0.5 }} />
-                      <Typography variant="body2">Terminé</Typography>
-                    </>
-                  ) : (
-                    <>
-                      <Cancel fontSize="small" sx={{ mr: 0.5 }} />
-                      <Typography variant="body2">En cours</Typography>
-                    </>
-                  )}
-                </Box>
               </CardContent>
-            </Card>
+            </GlassCard>
 
-            <Card sx={{ mt: 2 }}>
+            {/* Navigation Card */}
+            <GlassCard>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Navigation rapide
+                <Typography variant="h6" fontWeight="600" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'var(--text-on-card)' }}>
+                  <Notes /> Navigation Rapide
                 </Typography>
-                <Box sx={{ maxHeight: '300px', overflowY: 'auto' }}>
+                
+                <Box sx={{ maxHeight: '400px', overflowY: 'auto' }}>
                   {session.responses?.map((response, index) => (
                     <Box 
                       key={response.id}
                       onClick={() => setCurrentResponseIndex(index)}
                       sx={{
-                        p: 1.5,
+                        p: 2,
                         mb: 1,
-                        borderRadius: 1,
+                        borderRadius: '12px',
                         cursor: 'pointer',
-                        bgcolor: currentResponseIndex === index ? 'action.hover' : 'background.paper',
+                        background: currentResponseIndex === index ? 
+                          'var(--gradient-violet)' : 
+                          'rgba(255,255,255,0.06)',
+                        color: currentResponseIndex === index ? 'white' : 'var(--text-on-card)',
+                        transition: 'all 0.3s ease',
                         '&:hover': {
-                          bgcolor: 'action.hover'
-                        },
-                        transition: 'background-color 0.2s'
+                          transform: 'translateX(4px)',
+                          background: currentResponseIndex === index ? 
+                            'var(--gradient-violet-strong)' : 
+                            'rgba(255,255,255,0.08)',
+                        }
                       }}
                     >
                       <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Typography variant="subtitle2">Question {index + 1}</Typography>
+                        <Typography variant="subtitle2" fontWeight="500">
+                          Question {index + 1}
+                        </Typography>
                         {response.evaluations?.length > 0 ? (
-                          <Typography variant="caption" color="success.main">
-                            Évalué
-                          </Typography>
+                          <Chip
+                            icon={<CheckCircle />}
+                            label="Évalué"
+                            size="small"
+                            color="success"
+                            sx={{ 
+                              color: currentResponseIndex === index ? 'white' : 'inherit',
+                              backgroundColor: currentResponseIndex === index ? 'rgba(255, 255, 255, 0.2)' : 'success.light'
+                            }}
+                          />
                         ) : (
-                          <Typography variant="caption" color="textSecondary">
-                            Non évalué
-                          </Typography>
+                          <Chip
+                            label="Non évalué"
+                            size="small"
+                            color="default"
+                            sx={{ 
+                              color: currentResponseIndex === index ? 'white' : 'inherit',
+                              backgroundColor: currentResponseIndex === index ? 'rgba(255, 255, 255, 0.2)' : 'grey.100'
+                            }}
+                          />
                         )}
                       </Box>
                     </Box>
                   ))}
                 </Box>
               </CardContent>
-            </Card>
+            </GlassCard>
           </Grid>
         </Grid>
       ) : (
-        <Card>
+        /* Evaluation Summary Tab */
+        <GlassCard>
           <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Résumé des évaluations
+            <Typography variant="h6" fontWeight="600" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Assessment /> Résumé des Évaluations
             </Typography>
+            
             {session.responses?.length > 0 ? (
               session.responses.map((response, index) => (
-                <Box key={response.id} mb={3} pb={2} borderBottom="1px solid #eee">
-                  <Typography variant="subtitle1" gutterBottom>
-                    <strong>Question {index + 1}:</strong> {response.question_text}
+                <Box key={response.id} mb={4} pb={3} sx={{ 
+                  borderBottom: '2px solid',
+                  borderColor: 'divider',
+                  '&:last-child': { borderBottom: 'none' }
+                }}>
+                  <Typography variant="subtitle1" fontWeight="600" gutterBottom color="primary">
+                    Question {index + 1}: {response.question_text}
                   </Typography>
+                  
                   {response.evaluations?.length > 0 ? (
-                    <Box>
-                      <Box display="flex" alignItems="center" mb={1}>
-                        <Typography variant="body2" sx={{ minWidth: '120px' }}>Compétences techniques:</Typography>
-                        <Rating value={response.evaluations[0].technical_skill} readOnly precision={0.5} />
-                        <Typography variant="body2" sx={{ ml: 1 }}>({response.evaluations[0].technical_skill})</Typography>
-                      </Box>
-                      <Box display="flex" alignItems="center" mb={1}>
-                        <Typography variant="body2" sx={{ minWidth: '120px' }}>Communication:</Typography>
-                        <Rating value={response.evaluations[0].communication} readOnly precision={0.5} />
-                        <Typography variant="body2" sx={{ ml: 1 }}>({response.evaluations[0].communication})</Typography>
-                      </Box>
-                      <Box display="flex" alignItems="center" mb={1}>
-                        <Typography variant="body2" sx={{ minWidth: '120px' }}>Motivation:</Typography>
-                        <Rating value={response.evaluations[0].motivation} readOnly precision={0.5} />
-                        <Typography variant="body2" sx={{ ml: 1 }}>({response.evaluations[0].motivation})</Typography>
-                      </Box>
-                      <Box display="flex" alignItems="center" mb={1}>
-                        <Typography variant="body2" sx={{ minWidth: '120px' }}>Ajustement culturel:</Typography>
-                        <Rating value={response.evaluations[0].cultural_fit} readOnly precision={0.5} />
-                        <Typography variant="body2" sx={{ ml: 1 }}>({response.evaluations[0].cultural_fit})</Typography>
-                      </Box>
-                      <Box display="flex" alignItems="center" mb={1}>
-                        <Typography variant="body2" sx={{ minWidth: '120px' }}>Recommandation:</Typography>
-                        {response.evaluations[0].recommended === true ? (
-                          <Box display="flex" alignItems="center" color="success.main">
-                            <ThumbUp fontSize="small" sx={{ mr: 0.5 }} />
-                            <Typography>Favorable</Typography>
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} md={6}>
+                        {[
+                          { label: "Compétences techniques", value: response.evaluations[0].technical_skill },
+                          { label: "Communication", value: response.evaluations[0].communication },
+                          { label: "Motivation", value: response.evaluations[0].motivation },
+                          { label: "Ajustement culturel", value: response.evaluations[0].cultural_fit }
+                        ].map((item) => (
+                          <Box key={item.label} mb={2}>
+                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                              <Typography variant="body2" fontWeight="500">
+                                {item.label}
+                              </Typography>
+                              <Typography variant="body2" fontWeight="600" color="primary">
+                                {item.value}/5
+                              </Typography>
+                            </Box>
+                            <Rating value={item.value} readOnly precision={0.5} size="small" />
                           </Box>
-                        ) : response.evaluations[0].recommended === false ? (
-                          <Box display="flex" alignItems="center" color="error.main">
-                            <ThumbDown fontSize="small" sx={{ mr: 0.5 }} />
-                            <Typography>Défavorable</Typography>
-                          </Box>
-                        ) : (
-                          <Typography variant="body2" color="textSecondary">Non spécifié</Typography>
-                        )}
-                      </Box>
-                      {response.evaluations[0].notes && (
-                        <Box mt={1}>
-                          <Typography variant="subtitle2">Notes:</Typography>
-                          <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
-                            {response.evaluations[0].notes}
+                        ))}
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <Box mb={2}>
+                          <Typography variant="body2" fontWeight="500" gutterBottom>
+                            Recommandation
                           </Typography>
+                          {response.evaluations[0].recommended === true ? (
+                            <Chip
+                              icon={<ThumbUp />}
+                              label="Favorable"
+                              color="success"
+                              variant="filled"
+                            />
+                          ) : response.evaluations[0].recommended === false ? (
+                            <Chip
+                              icon={<ThumbDown />}
+                              label="Défavorable"
+                              color="error"
+                              variant="filled"
+                            />
+                          ) : (
+                            <Typography variant="body2" color="textSecondary">
+                              Non spécifié
+                            </Typography>
+                          )}
                         </Box>
-                      )}
-                      <Box mt={1} display="flex" justifyContent="flex-end">
-                        <Typography variant="caption" color="textSecondary">
-                          Évalué par {response.evaluations[0].hiring_manager_name} le{' '}
-                          {new Date(response.evaluations[0].evaluated_at).toLocaleDateString()}
-                        </Typography>
-                      </Box>
-                    </Box>
+                        
+                        {response.evaluations[0].notes && (
+                          <Box>
+                            <Typography variant="body2" fontWeight="500" gutterBottom>
+                              Notes
+                            </Typography>
+                            <Paper variant="outlined" sx={{ p: 2, borderRadius: '12px' }}>
+                              <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+                                {response.evaluations[0].notes}
+                              </Typography>
+                            </Paper>
+                          </Box>
+                        )}
+                      </Grid>
+                    </Grid>
                   ) : (
-                    <Typography variant="body2" color="textSecondary" fontStyle="italic">
-                      Non évalué
-                    </Typography>
+                    <Box textAlign="center" py={3}>
+                      <Typography variant="body2" color="textSecondary" fontStyle="italic">
+                        Cette réponse n'a pas encore été évaluée
+                      </Typography>
+                    </Box>
                   )}
                 </Box>
               ))
             ) : (
-              <Typography variant="body1" color="textSecondary">
-                Aucune réponse n'a encore été évaluée.
-              </Typography>
+              <Box textAlign="center" py={6}>
+                <Assessment sx={{ fontSize: 60, color: 'var(--text-primary)', mb: 2 }} />
+                <Typography variant="h6" sx={{ color: 'var(--text-primary)' }}>
+                  Aucune réponse à évaluer
+                </Typography>
+              </Box>
             )}
           </CardContent>
-        </Card>
+        </GlassCard>
       )}
     </Box>
   );

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { inviteCandidate } from "../services/campaigns";
+import React, { useState, useEffect } from "react";
+import { inviteCandidate, fetchCampaign } from "../services/campaigns";
 import "./InviteModal.css";
 
 export default function InviteModal({ campaignId, onClose }) {
@@ -8,12 +8,76 @@ export default function InviteModal({ campaignId, onClose }) {
   const [link, setLink] = useState(null);
   const [meta, setMeta] = useState(null);
   const [error, setError] = useState(null);
+  const [campaign, setCampaign] = useState(null);
+  
+  // Helpers to build email contents (subject, text body, HTML body)
+  const buildEmailSubject = (c) => `Invitation à un entretien vidéo - ${c?.title || "Campagne"}`;
+  const buildEmailLines = (c, linkUrl, recipientFirstName) => {
+    const title = c?.title || "(Titre de la campagne)";
+    const description = (c?.description || "").trim();
+    const start = c?.start_date ? new Date(c.start_date).toLocaleString() : null;
+    const end = c?.end_date ? new Date(c.end_date).toLocaleString() : null;
+    const greeting = recipientFirstName ? `Bonjour ${recipientFirstName},` : "Bonjour,";
+
+    return [
+      greeting,
+      "",
+      `Vous êtes invité(e) à participer à un entretien vidéo pour la campagne : ${title}.`,
+      description ? "" : null,
+      description ? `Description : ${description}` : null,
+      start || end ? "" : null,
+      start || end ? `Période : ${start ? `Début ${start}` : ""}${start && end ? " | " : ""}${end ? `Fin ${end}` : ""}` : null,
+      "",
+      `Pour démarrer l'entretien, cliquez sur le lien suivant : ${linkUrl}`,
+      "",
+      "Cordialement,",
+      "L'équipe de recrutement",
+    ].filter(Boolean);
+  };
+
+  const buildEmailHTML = (c, linkUrl, recipientFirstName) => {
+    const title = c?.title || "(Titre de la campagne)";
+    const description = (c?.description || "").trim();
+    const start = c?.start_date ? new Date(c.start_date).toLocaleString() : null;
+    const end = c?.end_date ? new Date(c.end_date).toLocaleString() : null;
+    const greeting = recipientFirstName ? `Bonjour ${recipientFirstName},` : "Bonjour,";
+
+    return `<!DOCTYPE html>
+<html>
+  <body style="font-family: Arial, sans-serif; color:#1f2a37; line-height:1.55;">
+    <p>${greeting}</p>
+    <p>Vous avez été invité(e) à passer un entretien vidéo pour la campagne : <strong>${title}</strong>.</p>
+    ${description ? `<p><strong>Description :</strong><br/>${description.replace(/\n/g, '<br/>')}</p>` : ''}
+    ${(start || end) ? `<p><strong>Période de la campagne :</strong><br/>${start ? `Début : ${start}` : ''}${start && end ? `<br/>` : ''}${end ? `Fin : ${end}` : ''}</p>` : ''}
+    <p>Pour commencer, veuillez cliquer sur le lien ci-dessous :</p>
+    <p><a href="${linkUrl}" style="display:inline-block;padding:10px 14px;background:#a78bfa;color:#0f172a;text-decoration:none;border-radius:6px;">Accéder à l'entretien</a></p>
+    <p style="margin-top:16px; color:#475569; font-size:13px;">Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :<br/>
+    <span>${linkUrl}</span></p>
+    <p>Cordialement,<br/>L'équipe de recrutement</p>
+  </body>
+</html>`;
+  };
 
   const handle = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   const extractToken = (res) => {
     return res?.access_token || res?.session?.access_token || res?.session_access_token || res?.id || null;
   };
+
+  // Load campaign details to enrich email content
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      try {
+        const data = await fetchCampaign(campaignId);
+        if (mounted) setCampaign(data);
+      } catch (e) {
+        // Non-blocking: we can still send a minimal email without campaign meta
+      }
+    }
+    if (campaignId) load();
+    return () => { mounted = false; };
+  }, [campaignId]);
 
   const submit = async (e) => {
     e && e.preventDefault();
@@ -40,9 +104,32 @@ export default function InviteModal({ campaignId, onClose }) {
 
   const sendEmail = () => {
     if (!link) return;
-    const subject = encodeURIComponent("Invitation à passer un entretien");
-    const body = encodeURIComponent(`Bonjour,\n\nVous êtes invité(e) à un entretien. Cliquez ici: ${link}\n\nCordialement.`);
+    const subject = encodeURIComponent(buildEmailSubject(campaign));
+    const lines = buildEmailLines(campaign, link, form.first_name);
+    const body = encodeURIComponent(lines.join("\n"));
     window.location.href = `mailto:${form.email || ""}?subject=${subject}&body=${body}`;
+  };
+
+  const copyTextEmail = async () => {
+    if (!link) return;
+    const lines = buildEmailLines(campaign, link, form.first_name);
+    const text = lines.join("\n");
+    try { await navigator.clipboard.writeText(text); } catch (_) {}
+  };
+
+  const copyHtmlEmail = async () => {
+    if (!link) return;
+    const html = buildEmailHTML(campaign, link, form.first_name);
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        const type = "text/html";
+        const blob = new Blob([html], { type });
+        await navigator.clipboard.write([new window.ClipboardItem({ [type]: blob })]);
+      } else {
+        // Fallback: copy as plain text (HTML source)
+        await navigator.clipboard.writeText(html);
+      }
+    } catch (_) {}
   };
 
   return (
@@ -68,9 +155,21 @@ export default function InviteModal({ campaignId, onClose }) {
             <h3>Lien généré</h3>
             <div className="generated-link"><a href={link} target="_blank" rel="noreferrer">{link}</a></div>
             {meta && <div className="meta">Expire: {new Date(meta).toLocaleString()}</div>}
+            {/* Email preview */}
+            <div className="email-preview">
+              <div className="email-preview__row"><span className="email-label">À :</span><span>{form.email || ""}</span></div>
+              <div className="email-preview__row"><span className="email-label">Objet :</span><span>{buildEmailSubject(campaign)}</span></div>
+              <div className="email-preview__body">
+                {buildEmailLines(campaign, link, form.first_name).map((ln, idx) => (
+                  <div key={idx}>{ln}</div>
+                ))}
+              </div>
+            </div>
             <div className="modal-actions">
-              <button onClick={() => { try { navigator.clipboard.writeText(link); } catch(_){} }}>Copier</button>
-              <button onClick={sendEmail}>Envoyer par e‑mail</button>
+              <button className="btn" onClick={() => { try { navigator.clipboard.writeText(link); } catch(_){} }}>Copier le lien</button>
+              <button className="btn" onClick={copyTextEmail}>Copier le texte</button>
+              <button className="btn btn-primary" onClick={sendEmail}>Ouvrir dans le client e‑mail</button>
+              <button className="btn btn-ghost" onClick={copyHtmlEmail} title="Copier une version HTML stylée de l'e‑mail">Copier l'email HTML</button>
               <button onClick={() => onClose(link)}>Fermer</button>
             </div>
           </div>

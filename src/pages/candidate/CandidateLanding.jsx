@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Card, Spinner } from 'react-bootstrap';
-import { FaPlay, FaStop, FaExclamationTriangle } from 'react-icons/fa';
+import { FaPlay, FaStop, FaExclamationTriangle, FaCheckCircle, FaVideo, FaMicrophone, FaMoon, FaSun } from 'react-icons/fa';
 import api, { interviewApi } from '../../services/api';
+import * as faceapi from 'face-api.js';
 import './CandidateLanding.css';
 
 const STAGES = {
@@ -16,27 +17,27 @@ const STAGES = {
 };
 
 const LoadingSpinner = ({ message = "Chargement en cours..." }) => (
-  <div className="text-center p-5">
-    <Spinner animation="border" role="status">
-      <span className="visually-hidden">Chargement...</span>
-    </Spinner>
-    <p className="mt-3">{message}</p>
+  <div className="candidate-loading-container">
+    <div className="candidate-loading-spinner">
+      <Spinner animation="border" role="status" variant="primary" />
+      <p className="candidate-loading-message">{message}</p>
+    </div>
   </div>
 );
 
 const ErrorDisplay = ({ error, onRetry }) => (
-  <div className="alert alert-danger mt-5">
-    <div className="d-flex align-items-center">
-      <FaExclamationTriangle className="me-2" size={24}/>
-      <div>
-        <h5 className="alert-heading">Erreur</h5>
-        <p className="mb-0">{error}</p>
-        {onRetry && (
-          <Button variant="outline-danger" className="mt-3" onClick={onRetry}>
-            Réessayer
-          </Button>
-        )}
+  <div className="candidate-error-container">
+    <div className="candidate-error-content">
+      <div className="candidate-error-icon">
+        <FaExclamationTriangle />
       </div>
+      <h3>Erreur</h3>
+      <p>{error}</p>
+      {onRetry && (
+        <Button variant="primary" className="candidate-retry-btn" onClick={onRetry}>
+          Réessayer
+        </Button>
+      )}
     </div>
   </div>
 );
@@ -46,27 +47,170 @@ export default function CandidateLanding() {
   const navigate = useNavigate();
 
   const [stage, setStage] = useState(STAGES.LOADING);
+  const [isDark, setIsDark] = useState(() => {
+    try {
+      const saved = localStorage.getItem('theme');
+      if (saved) return saved === 'dark';
+    } catch (_) {}
+    // Fallback to current DOM class
+    return document.documentElement.classList.contains('dark');
+  });
   const [session, setSession] = useState(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isStarting, setIsStarting] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [recordedBlobs, setRecordedBlobs] = useState(() => {
-    // Initialiser avec un tableau de la bonne taille rempli de null
-    if (session?.questions) {
-      return new Array(session.questions.length).fill(null);
-    }
-    return [];
-  });
+  const [recordedBlobs, setRecordedBlobs] = useState([]);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaError, setMediaError] = useState(null);
+  const [networkQuality, setNetworkQuality] = useState(null);
+  const [networkDetails, setNetworkDetails] = useState(null);
+  // Multi-face detection state
+  const [faceApiReady, setFaceApiReady] = useState(false);
+  const [modelType, setModelType] = useState(null); // 'ssd' | 'tiny'
+  const [multiFaceWarning, setMultiFaceWarning] = useState(false);
+  const faceCheckTimerRef = useRef(null);
 
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
+  // Stabilization refs for detection
+  const consecutiveMultiRef = useRef(0);
+  const consecutiveSingleRef = useRef(0);
+  const lastDetectionsRef = useRef([]);
+  const SHOW_FACE_DEBUG = false; // hide debug boxes by default for cleaner UI
+  
+  // Load model(s) from /models: try ssdMobilenetv1 first, then fallback to tinyFaceDetector
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        await faceapi.nets.ssdMobilenetv1.loadFromUri('/models');
+        if (mounted) {
+          setModelType('ssd');
+          setFaceApiReady(true);
+          console.log('[FaceDetect] Modèle actif: ssdMobilenetv1 (local)');
+          return;
+        }
+      } catch (e) {
+        console.warn('[FaceDetect] ssdMobilenetv1 non disponible en local, tentative tinyFaceDetector…');
+      }
+      try {
+        await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+        if (mounted) {
+          setModelType('tiny');
+          setFaceApiReady(true);
+          console.log('[FaceDetect] Modèle actif: tinyFaceDetector (local)');
+          return;
+        }
+      } catch (e) {
+        console.warn('[FaceDetect] tinyFaceDetector non disponible en local');
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  // Run detection every 300ms during preparation/recording
+  useEffect(() => {
+    const shouldRun = (stage === STAGES.PREPARATION || stage === STAGES.RECORDING);
+    const video = videoRef.current;
+    const detect = async () => {
+      if (!shouldRun || !faceApiReady || !video) return;
+      if (!video.videoWidth || !video.videoHeight || video.readyState < 2) return;
+      try {
+        let detections = [];
+        if (modelType === 'ssd') {
+          detections = await faceapi.detectAllFaces(
+            video,
+            new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })
+          );
+        } else if (modelType === 'tiny') {
+          detections = await faceapi.detectAllFaces(
+            video,
+            new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.2 })
+          );
+        }
+        // Filter out extremely small boxes (noise) based on area threshold (>= 2% of frame)
+        const vw = video.videoWidth || 1;
+        const vh = video.videoHeight || 1;
+        const minArea = vw * vh * 0.005;
+        lastDetectionsRef.current = detections || [];
+        const valid = lastDetectionsRef.current.filter(d => {
+          const b = d.box || d;
+          const w = b.width || 0; const h = b.height || 0;
+          return (w * h) >= minArea;
+        });
+        const count = valid.length;
+        console.log('Nombre de visages:', count);
+        // Hysteresis: require N consecutive frames to switch states
+        const upThreshold = 3;   // ~900ms at 300ms interval
+        const downThreshold = 5; // ~1.5s to clear
+        if (count > 1) {
+          consecutiveMultiRef.current += 1;
+          consecutiveSingleRef.current = 0;
+          if (consecutiveMultiRef.current >= upThreshold && !multiFaceWarning) {
+            setMultiFaceWarning(true);
+          }
+        } else {
+          consecutiveSingleRef.current += 1;
+          consecutiveMultiRef.current = 0;
+          if (consecutiveSingleRef.current >= downThreshold && multiFaceWarning) {
+            setMultiFaceWarning(false);
+          }
+        }
+
+        // Draw debug overlay (optional)
+        if (SHOW_FACE_DEBUG) {
+          const canvas = canvasRef.current;
+          if (canvas) {
+            const cw = video.clientWidth || video.videoWidth;
+            const ch = video.clientHeight || video.videoHeight;
+            // Ensure canvas matches displayed size
+            canvas.width = cw;
+            canvas.height = ch;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, cw, ch);
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.85)';
+            ctx.lineWidth = 3;
+            ctx.fillStyle = 'rgba(255,0,0,0.35)';
+            ctx.font = '12px sans-serif';
+            // Scale from video intrinsic dims to displayed dims
+            const sx = cw / (video.videoWidth || cw);
+            const sy = ch / (video.videoHeight || ch);
+            (lastDetectionsRef.current || []).forEach(d => {
+              const b = d.box || d;
+              const x = (b.x || b.left || 0) * sx;
+              const y = (b.y || b.top || 0) * sy;
+              const w = (b.width || 0) * sx;
+              const h = (b.height || 0) * sy;
+              ctx.strokeRect(x, y, w, h);
+              ctx.fillRect(x, y - 16, Math.max(60, 40), 16);
+              const score = typeof d.score === 'number' ? d.score.toFixed(2) : '';
+              ctx.fillStyle = '#fff';
+              ctx.fillText(`face ${score}`, x + 4, y - 4);
+              ctx.fillStyle = 'rgba(255,0,0,0.35)';
+            });
+          }
+        }
+      } catch (err) {
+        // ignore transient errors
+      }
+    };
+    if (shouldRun) {
+      faceCheckTimerRef.current = window.setInterval(detect, 300);
+      detect();
+    }
+    return () => {
+      if (faceCheckTimerRef.current) {
+        clearInterval(faceCheckTimerRef.current);
+        faceCheckTimerRef.current = null;
+      }
+    };
+  }, [stage, faceApiReady, modelType]);
   const preparationTimeRef = useRef(0);
   const recordingTimeRef = useRef(0);
   const isStoppingRef = useRef(false);
@@ -96,6 +240,21 @@ export default function CandidateLanding() {
     setError(errorMessage);
     setStage(STAGES.ERROR);
   }, []);
+
+  // Apply theme to document
+  useEffect(() => {
+    try {
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+      }
+    } catch (_) {}
+  }, [isDark]);
+
+  const toggleTheme = () => setIsDark((v) => !v);
 
   const startMediaStream = useCallback(async () => {
     try {
@@ -133,21 +292,74 @@ export default function CandidateLanding() {
     return await startMediaStream();
   }, [startMediaStream]);
 
+  const checkNetworkQuality = useCallback(async () => {
+    try {
+      const navConn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      let details = {};
+      if (navConn) {
+        details = {
+          effectiveType: navConn.effectiveType,
+          downlink: navConn.downlink,
+          rtt: navConn.rtt,
+          saveData: navConn.saveData
+        };
+      }
+
+      // Fallback RTT test if Network Information API unavailable or inconclusive
+      const measureRTT = async () => {
+        const attempts = 3;
+        let sum = 0;
+        for (let i = 0; i < attempts; i++) {
+          const t0 = performance.now();
+          try {
+            // Use the public session-access GET endpoint for a lightweight call
+            await fetch(`${api.defaults.baseURL}session-access/${accessToken}/`, { cache: 'no-store', method: 'GET' });
+            const t1 = performance.now();
+            sum += (t1 - t0);
+          } catch (_) {
+            sum += 1000; // penalize on failure
+          }
+        }
+        return sum / attempts;
+      };
+
+      let quality = 'moderate';
+      let rtt = details.rtt;
+      if (!rtt || typeof rtt !== 'number') {
+        rtt = await measureRTT();
+      }
+      // Determine quality primarily from RTT and secondarily from downlink
+      if (rtt <= 150) quality = 'good';
+      else if (rtt <= 400) quality = 'moderate';
+      else quality = 'poor';
+
+      const dl = Number(details.downlink || 0);
+      if (dl && dl < 1) quality = 'poor';
+
+      setNetworkDetails({ ...details, measuredRtt: Math.round(rtt) });
+      setNetworkQuality(quality);
+      return quality;
+    } catch (e) {
+      setNetworkDetails(null);
+      setNetworkQuality('moderate');
+      return 'moderate';
+    }
+  }, [accessToken]);
+
   useEffect(() => {
     const loadSession = async () => {
       try {
         setStage(STAGES.LOADING);
         const hasPermission = await checkMediaPermissions();
         if (!hasPermission) return;
+        await checkNetworkQuality();
 
         const response = await api.get(`session-access/${accessToken}/`);
         
         if (response.data.success === false) {
-          // Si le serveur renvoie une erreur
           throw new Error(response.data.error || "Échec du chargement de la session");
         }
         
-        // Mettre à jour l'état de la session avec les données reçues
         setSession(prev => ({
           ...prev,
           ...response.data,
@@ -156,7 +368,6 @@ export default function CandidateLanding() {
           is_used: response.data.is_used || false
         }));
         
-        // Vérifier si la session est déjà démarrée
         if (response.data.status === "in_progress" || response.data.is_used) {
           setError("Cette session a déjà été démarrée. Veuillez utiliser le même onglet/navigateur.");
           setStage(STAGES.ERROR);
@@ -175,7 +386,7 @@ export default function CandidateLanding() {
       stopMediaTracks();
       clearTimers();
     };
-  }, [accessToken, checkMediaPermissions, handleError]);
+  }, [accessToken, checkMediaPermissions, checkNetworkQuality, handleError]);
 
   const clearTimers = () => { if (timerRef.current) clearInterval(timerRef.current); };
   const stopMediaTracks = () => { 
@@ -205,25 +416,21 @@ export default function CandidateLanding() {
     
     try {
       setIsStarting(true);
-      
-      // Appel pour démarrer la session d'entretien
-      const response = await api.post(`session-access/${accessToken}/`, { action: 'start_session' });
-      
-      if (response.data.success) {
-        // Mettre à jour l'état local avec les données de la réponse
+      // Use backend /start/ endpoint (or interviewApi abstraction)
+      const response = await interviewApi.startSession(accessToken);
+      if (response && (response.success || response.status === 'in_progress')) {
         setSession(prev => ({
           ...prev,
-          id: response.data.session_id,
-          status: response.data.status || "in_progress",
+          id: response.session_id || response.id || prev?.id,
+          status: response.status || "in_progress",
           is_used: true,
-          started_at: response.data.started_at || new Date().toISOString()
+          started_at: response.started_at || new Date().toISOString()
         }));
 
-        // Démarrer la préparation
-        // Démarrer la préparation pour la question courante
         startPreparation(currentQuestionIndex);
       } else {
-        throw new Error(response.data.error || "Échec du démarrage de la session");
+        const msg = response?.error || response?.detail || "Échec du démarrage de la session";
+        throw new Error(msg);
       }
       
     } catch (error) {
@@ -243,13 +450,12 @@ export default function CandidateLanding() {
   const stopRecording = useCallback(() => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
-    // arrêter le timer d'abord pour éviter un double-stop
     clearTimers();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     } else {
-      isStoppingRef.current = false; // rien à stopper
+      isStoppingRef.current = false;
     }
   }, []);
 
@@ -260,10 +466,8 @@ export default function CandidateLanding() {
       const prepUsedMs = Math.max(0, Date.now() - prepStart);
       preparationTimeRef.current = prepUsedMs;
       
-      // Arrêter l'aperçu et démarrer l'enregistrement
       stopMediaTracks();
       
-      // Démarrer le flux média avec les bonnes contraintes
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
           width: { ideal: 1280 },
@@ -279,23 +483,20 @@ export default function CandidateLanding() {
       
       streamRef.current = stream;
 
-      // Configurer l'élément vidéo
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.muted = true; // Désactiver le son pour éviter les échos
-        videoRef.current.setAttribute('playsinline', ''); // Pour iOS
+        videoRef.current.muted = true;
+        videoRef.current.setAttribute('playsinline', '');
         
         try {
           await videoRef.current.play();
         } catch (err) {
           console.warn("Erreur lors de la lecture de la vidéo:", err);
-          // Essayer de récupérer en cas d'échec
           videoRef.current.muted = true;
           await videoRef.current.play().catch(console.error);
         }
       }
 
-      // S'assurer que le flux est actif
       if (!streamRef.current || streamRef.current.getVideoTracks().length === 0) {
         throw new Error("Aucune piste vidéo disponible pour l'enregistrement");
       }
@@ -331,7 +532,6 @@ export default function CandidateLanding() {
             return;
           }
 
-          // Construire le fichier à partir des chunks
           const blob = new Blob(recordedChunks, { type: 'video/webm' });
           const file = new File([blob], `response_${Date.now()}.webm`, { type: 'video/webm' });
 
@@ -339,21 +539,22 @@ export default function CandidateLanding() {
           const prepMs = typeof preparationTimeRef.current === 'number' ? preparationTimeRef.current : 0;
           const recMs = recordingTimeRef.current ? (Date.now() - recordingTimeRef.current) : 0;
 
-          // Construire le FormData pour l'API backend par question
           const formData = new FormData();
-          formData.append('question', q.id);
-          formData.append('video_file', file);
-          formData.append('duration', Math.max(1, Math.round(recMs / 1000))); // en secondes
-          formData.append('preparation_time_used', Math.max(0, Math.round(prepMs / 1000)));
-          formData.append('response_time_used', Math.max(1, Math.round(recMs / 1000)));
+          // Backend expects a list field 'responses' with JSON per response
+          formData.append('responses', JSON.stringify({
+            question_id: q.id,
+            preparation_time: Math.max(0, Math.round(prepMs)),
+            recording_time: Math.max(1, Math.round(recMs)),
+          }));
+          // And each file under key `video_{question_id}`
+          formData.append(`video_${q.id}`, file);
 
-          // Envoyer la réponse de la question immédiatement
-          await api.post(`session-access/${accessToken}/`, formData, {
+          // Submit to session submit endpoint using session.id
+          await api.post(`sessions/${session.id}/submit/`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
             timeout: 300000,
           });
 
-          // Nettoyer la vidéo d'aperçu
           if (videoRef.current) {
             try { videoRef.current.pause(); } catch (e) {}
             videoRef.current.srcObject = null;
@@ -363,12 +564,10 @@ export default function CandidateLanding() {
             streamRef.current = null;
           }
 
-          // Passer à la question suivante ou terminer
           const total = session.questions.length;
           const nextIndex = index + 1;
           if (nextIndex < total) {
             setCurrentQuestionIndex(nextIndex);
-            // lancer la préparation explicitement pour l'index suivant
             startPreparation(nextIndex);
           } else {
             setStage(STAGES.COMPLETED);
@@ -383,13 +582,11 @@ export default function CandidateLanding() {
         }
       };
 
-      // Démarrer l'enregistrement avec un intervalle de 100ms
       mediaRecorder.start(100);
       setIsRecording(true);
       recordingTimeRef.current = Date.now();
       setStage(STAGES.RECORDING);
 
-      // Démarrer le compte à rebours d'enregistrement
       startCountdown(question.response_time_limit, stopRecording);
     
     } catch (err) {
@@ -397,9 +594,8 @@ export default function CandidateLanding() {
       setError(err.message || "Erreur lors du démarrage de l'enregistrement");
       setStage(STAGES.ERROR);
     }
-  }, [session, stopRecording, startCountdown, stopMediaTracks, currentQuestionIndex]);
+  }, [session, stopRecording, startCountdown, stopMediaTracks, currentQuestionIndex, accessToken]);
 
-  // Helper d'affichage mm:ss
   const formatTime = (sec) => {
     const s = Math.max(0, Number(sec) || 0);
     const m = Math.floor(s / 60)
@@ -415,97 +611,210 @@ export default function CandidateLanding() {
     () => session?.questions?.[currentQuestionIndex],
     [session, currentQuestionIndex]
   );
-  const progress = useMemo(
-    () => (session ? Math.round((currentQuestionIndex / session.questions.length) * 100) : 0),
-    [session, currentQuestionIndex]
-  );
+  const progress = useMemo(() => {
+    if (!session || !Array.isArray(session.questions) || session.questions.length === 0) return 0;
+    const total = session.questions.length;
+    if (stage === STAGES.INSTRUCTIONS) return 0;
+    if (stage === STAGES.COMPLETED) return 100;
+    const completedCount = Math.min(total, currentQuestionIndex + 1);
+    return Math.round((completedCount / total) * 100);
+  }, [session, currentQuestionIndex, stage]);
 
   if (stage === STAGES.LOADING) return <LoadingSpinner message="Chargement de votre session d'entretien..." />;
-  if (stage === STAGES.ERROR) return <ErrorDisplay error={error} onRetry={() => setStage(STAGES.INSTRUCTIONS)} />;
+  if (stage === STAGES.ERROR) return <ErrorDisplay error={error} onRetry={() => window.location.reload()} />;
 
   return (
-    <div className="container mt-5">
-      <h2>{session.campaign.title}</h2>
-      <p>{session.campaign.description}</p>
+    <div className="candidate-container">
+      <div className="candidate-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+        <div>
+          <h1 className="candidate-title">{session?.campaign?.title || "Entretien"}</h1>
+          <p className="candidate-description">{session?.campaign?.description || ""}</p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={toggleTheme}
+          aria-label={isDark ? 'Basculer en mode clair' : 'Basculer en mode sombre'}
+          title={isDark ? 'Mode clair' : 'Mode sombre'}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {isDark ? <><FaSun className="me-2"/> Mode clair</> : <><FaMoon className="me-2"/> Mode sombre</>}
+        </button>
+      </div>
 
-      <div className="mb-3">
-        <ProgressBar now={progress} />
+      <div className="candidate-progress-container">
+        <div className="candidate-progress-info">
+          <span>Progression: {currentQuestionIndex + 1}/{session?.questions?.length || 0}</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="candidate-progress-bar">
+          <div 
+            className="candidate-progress-fill" 
+            style={{ width: `${progress}%` }}
+            role="progressbar" 
+            aria-valuenow={progress} 
+            aria-valuemin="0" 
+            aria-valuemax="100"
+          ></div>
+        </div>
       </div>
 
       {stage === STAGES.INSTRUCTIONS && (
-        <Card className="p-4 mb-3">
-          <h5>Instructions :</h5>
-          <ul>
-            <li>Préparez-vous à répondre aux questions.</li>
-            <li>Vous aurez un temps de préparation et un temps d’enregistrement pour chaque question.</li>
-            <li>Assurez-vous que votre caméra et micro fonctionnent.</li>
-          </ul>
-          <Button 
-            variant="primary" 
-            onClick={startInterview} 
-            disabled={isStarting}
-          >
-            {isStarting ? (
-              <>
-                <Spinner as="span" size="sm" animation="border" role="status" aria-hidden="true" className="me-2" />
-                Démarrage...
-              </>
-            ) : (
-              <><FaPlay className="me-2"/> Commencer l'entretien</>
+        <Card className="candidate-card candidate-instructions">
+          <div className="candidate-card-header">
+            <h3>Instructions pour l'entretien</h3>
+          </div>
+          <div className="candidate-card-body">
+            <div className="instructions-list">
+              <div className="instruction-item">
+                <div className="instruction-icon">📋</div>
+                <div className="instruction-content">
+                  <h5>Préparez-vous à répondre aux questions</h5>
+                  <p>Chaque question aura un temps de préparation défini.</p>
+                </div>
+              </div>
+              <div className="instruction-item">
+                <div className="instruction-icon">⏱️</div>
+                <div className="instruction-content">
+                  <h5>Respectez les temps impartis</h5>
+                  <p>Vous aurez un temps limité pour préparer et enregistrer chaque réponse.</p>
+                </div>
+              </div>
+              <div className="instruction-item">
+                <div className="instruction-icon">🎥</div>
+                <div className="instruction-content">
+                  <h5>Vérifiez votre équipement</h5>
+                  <p>Assurez-vous que votre caméra et micro fonctionnent correctement.</p>
+                </div>
+              </div>
+            </div>
+            
+            {networkQuality && (
+              <div className={`network-status network-${networkQuality}`}>
+                <div className="network-status-header">
+                  <span className="network-icon">📶</span>
+                  <span className="network-quality">
+                    Qualité de connexion: {networkQuality === 'good' ? 'Bonne' : networkQuality === 'moderate' ? 'Moyenne' : 'Faible'}
+                  </span>
+                </div>
+                {networkDetails && (
+                  <div className="network-details">
+                    <span>Type: {networkDetails.effectiveType || 'n/a'}</span>
+                    <span>Débit: {networkDetails.downlink || 'n/a'} Mbps</span>
+                    <span>Latence: {networkDetails.rtt || 'n/a'} ms</span>
+                  </div>
+                )}
+                {networkQuality === 'poor' && (
+                  <div className="network-tips">
+                    <strong>Conseils:</strong> Rapprochez-vous de votre routeur, fermez les applications gourmandes en bande passante, ou utilisez un réseau filaire si possible.
+                  </div>
+                )}
+              </div>
             )}
-          </Button>
-        </Card>
-      )}
-
-      {(stage === STAGES.PREPARATION || stage === STAGES.RECORDING) && currentQuestion && (
-        <Card className="p-4 mb-3 text-center">
-          <h5>Question {currentQuestionIndex + 1}/{session.questions.length}: {currentQuestion.text}</h5>
-          <p className="text-muted">Enregistrement en cours...</p>
-          <p className="h4 mb-3">
-            {isRecording && <span className="recording-indicator"></span>}
-            {formatTime(timeLeft)}
-          </p>
-          
-          <video 
-            ref={videoRef} 
-            className="candidate-video mb-3" 
-            autoPlay 
-            playsInline 
-            muted 
-          />
-          
-          <div className="d-flex justify-content-center gap-3">
+            
+            <div className="media-check">
+              <div className="media-check-item">
+                <FaVideo className="media-icon" />
+                <span>Caméra: {mediaError ? '❌' : '✅'}</span>
+              </div>
+              <div className="media-check-item">
+                <FaMicrophone className="media-icon" />
+                <span>Micro: {mediaError ? '❌' : '✅'}</span>
+              </div>
+            </div>
+            
             <Button 
-              variant="danger" 
-              onClick={stopRecording}
-              disabled={!isRecording}
-              className="px-4"
+              variant="primary" 
+              className="candidate-start-btn"
+              onClick={startInterview} 
+              disabled={isStarting || networkQuality === 'poor'}
             >
-              <FaStop className="me-2" />
-              Arrêter et Enregistrer
+              {isStarting ? (
+                <>
+                  <Spinner as="span" size="sm" animation="border" role="status" aria-hidden="true" className="me-2" />
+                  Démarrage...
+                </>
+              ) : (
+                <><FaPlay className="me-2"/> Commencer l'entretien</>
+              )}
             </Button>
           </div>
         </Card>
       )}
 
-      {/* Étape de révision supprimée: les réponses sont envoyées automatiquement et on avance directement */}
+      {(stage === STAGES.PREPARATION || stage === STAGES.RECORDING) && currentQuestion && (
+        <Card className="candidate-card candidate-question">
+          <div className="candidate-card-header">
+            <h3>Question {currentQuestionIndex + 1}/{session.questions.length}</h3>
+            <div className={`time-display ${stage === STAGES.RECORDING ? 'recording' : 'preparing'}`}>
+              <span className="time-label">{stage === STAGES.PREPARATION ? 'Préparation' : 'Enregistrement'}</span>
+              <span className="time-remaining">{formatTime(timeLeft)}</span>
+            </div>
+          </div>
+          
+          <div className="candidate-card-body">
+            <div className="question-text">
+              <p>{currentQuestion.text}</p>
+            </div>
+            
+            <div className="video-container">
+              <video 
+                ref={videoRef} 
+                className="candidate-video" 
+                autoPlay 
+                playsInline 
+                muted 
+              />
+              {SHOW_FACE_DEBUG && (
+                <canvas ref={canvasRef} className="face-debug-canvas"/>
+              )}
+              {(stage === STAGES.RECORDING || stage === STAGES.PREPARATION) && (
+                <>
+                  <div className="recording-overlay">
+                    <div className="timer-badge">
+                      <span className="timer-dot"></span>
+                      <span>
+                        {stage === STAGES.RECORDING ? 'Enregistrement' : 'Préparation'} · {formatTime(timeLeft)}
+                      </span>
+                    </div>
+                  </div>
+                  {multiFaceWarning && (
+                    <div className="multi-face-warning" role="status" aria-live="polite">
+                      Nous avons détecté plusieurs visages dans le cadre. Veuillez vous assurer d'être seul face à la caméra.
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            
+            <div className="action-buttons">
+              {stage === STAGES.RECORDING && (
+                <Button 
+                  variant="danger" 
+                  onClick={stopRecording}
+                  className="stop-recording-btn"
+                >
+                  <FaStop className="me-2" />
+                  Arrêter et Enregistrer
+                </Button>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
 
       {stage === STAGES.COMPLETED && (
-        <Card className="p-4 mb-3 text-center">
-          <h5>Entretien terminé</h5>
-          <p>Toutes vos réponses ont été enregistrées automatiquement. Merci pour votre participation.</p>
-          <div className="mt-3">
-            <Button variant="secondary" onClick={() => navigate('/')}>Retour à l'accueil</Button>
+        <Card className="candidate-card candidate-completed">
+          <div className="candidate-card-body text-center">
+            <div className="completed-icon">
+              <FaCheckCircle />
+            </div>
+            <h3>Entretien terminé</h3>
+            <p>Merci pour votre participation. Toutes vos réponses ont été enregistrées avec succès.</p>
+            <Button variant="primary" onClick={() => navigate('/')}>Retour à l'accueil</Button>
           </div>
         </Card>
       )}
     </div>
   );
 }
-
-// --- Barre de progression ---
-const ProgressBar = ({ now }) => (
-  <div className="progress" style={{ height: '8px' }}>
-    <div className="progress-bar progress-bar-striped progress-bar-animated" style={{ width: `${now}%` }} role="progressbar" aria-valuenow={now} aria-valuemin="0" aria-valuemax="100"></div>
-  </div>
-);

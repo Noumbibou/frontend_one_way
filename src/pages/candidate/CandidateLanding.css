@@ -1,11 +1,15 @@
 /* Styles pour l'interface candidat */
 :root {
-  --primary-color: #4a6cf7;
+  --primary-color: var(--brand-primary);
+  --accent-color: var(--brand-accent);
   --danger-color: #dc3545;
   --success-color: #28a745;
   --warning-color: #ffc107;
-  --text-color: #333;
-  --light-bg: #f8f9fa;
+  --text-color: var(--text-primary);
+  --text-muted: var(--text-secondary);
+  --light-bg: var(--bg-subtle);
+  --card-bg: var(--bg-card);
+  --border-color: var(--border-color);
   --border-radius: 0.5rem;
   --box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
   --transition: all 0.3s ease;
@@ -13,10 +17,10 @@
 
 /* Reset et styles de base */
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   line-height: 1.6;
   color: var(--text-color);
-  background-color: #f5f7ff;
+  background-color: var(--bg-body);
 }
 
 /* Conteneur principal */
@@ -80,7 +84,8 @@ body {
 
 /* Cartes */
 .card {
-  border: none;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
   border-radius: var(--border-radius);
   box-shadow: var(--box-shadow);
   margin-bottom: 1.5rem;
@@ -115,13 +120,14 @@ body {
 }
 
 .btn-primary {
-  background-color: var(--primary-color);
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
   border-color: var(--primary-color);
+  color: #fff;
 }
 
 .btn-primary:hover {
-  background-color: #3a5bd9;
-  border-color: #3a5bd9;
+  background: linear-gradient(135deg, var(--brand-primary-dark), var(--brand-primary));
+  border-color: var(--brand-primary);
   transform: translateY(-1px);
 }
 
@@ -158,6 +164,16 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Force the <video> to truly fill the container (override earlier max constraints) */
+.video-container .candidate-video {
+  max-width: none !important;
+  max-height: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: inherit;
+  display: block;
 }
 
 /* Indicateur d'enregistrement */
@@ -210,7 +226,7 @@ body {
 
 .recording-hint {
   font-size: 0.9rem;
-  color: #6c757d;
+  color: var(--text-muted);
   max-width: 500px;
   margin: 0 auto;
   line-height: 1.5;
@@ -311,6 +327,222 @@ body {
   line-height: 1.6;
 }
 
+/* =====================
+   DARK MODE OVERRIDES
+   ===================== */
+.dark body {
+  background: var(--bg-body);
+  color: #ffffff;
+}
+
+.dark .candidate-container { color: #ffffff; }
+.dark .candidate-header .candidate-title,
+.dark .candidate-header .candidate-description { color: #ffffff; }
+
+.dark .candidate-card,
+.dark .card {
+  background: rgba(255,255,255,0.04) !important;
+  border: 1px solid #ffffff !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35) !important;
+}
+
+.dark .candidate-card-header,
+.dark .card-header { color: #ffffff; }
+.dark .card-body { color: #ffffff; }
+
+.dark .candidate-video,
+.dark .video-container { background: #0b0b0b; }
+
+.dark .candidate-progress-bar,
+.dark .progress {
+  background: rgba(255,255,255,0.08);
+}
+.dark .candidate-progress-fill,
+.dark .progress-bar {
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
+}
+
+.dark .btn-primary {
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent)) !important;
+  border-color: var(--brand-primary) !important;
+  color: #ffffff !important;
+}
+.dark .btn-primary:hover { filter: none; }
+
+/* Keep appearance steady on hover/focus for primary actions in dark mode */
+.dark .candidate-container .btn-primary:hover,
+.dark .candidate-container .btn-primary:focus {
+  background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent)) !important;
+  border-color: var(--brand-primary) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* Prevent any background-color change on hover for common blocks in dark */
+.dark .candidate-container .candidate-card:hover,
+.dark .candidate-container .candidate-card:focus,
+.dark .candidate-container .candidate-instructions:hover,
+.dark .candidate-container .candidate-instructions:focus {
+  background: rgba(255,255,255,0.04) !important;
+}
+
+/* Remove violet hover effects in dark mode specifically for the candidate page */
+.dark .candidate-container a,
+.dark .candidate-container a:hover,
+.dark .candidate-container a:focus {
+  color: #ffffff !important;
+  text-decoration-color: rgba(255,255,255,0.5);
+}
+
+.dark .candidate-container .btn:hover,
+.dark .candidate-container .btn:focus {
+  background: transparent !important;
+  border-color: #ffffff !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* Remove shimmer animation defined on .btn::before globally */
+.dark .candidate-container .btn::before,
+.dark .candidate-container .btn:hover::before,
+.dark .candidate-container .btn:focus::before {
+  content: none !important;
+  display: none !important;
+}
+
+.dark .candidate-card:hover,
+.dark .candidate-card:focus {
+  transform: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35) !important;
+  border-color: #ffffff !important;
+}
+
+/* Kill gradient glow pseudo-element from App.css for any card inside candidate UI */
+.dark .candidate-container .card:hover::after,
+.dark .candidate-container .card:focus::after,
+.dark .candidate-container .candidate-card:hover::after,
+.dark .candidate-container .candidate-card:focus::after {
+  content: none !important;
+  display: none !important;
+}
+
+.dark .btn-outline-danger { color: #ff6b6b; border-color: #ff6b6b; }
+.dark .btn-outline-danger:hover { background: #ff6b6b; color: #000; }
+
+.dark .recording-feedback { background: rgba(255,255,255,0.06); }
+.dark .recording-timer { background: rgba(220,53,69,0.2); color: #ff9aa2; }
+
+.dark .candidate-loading-message,
+.dark .network-details,
+.dark .network-quality,
+.dark .question-text p { color: #ffffff; }
+
+/* =====================
+   POLISH GENERAL LOOK
+   ===================== */
+.candidate-container { max-width: 1100px; margin: 0 auto; padding: 1.25rem; }
+.candidate-header { margin: 0 0 1rem; }
+.candidate-title { font-weight: 800; letter-spacing: -0.02em; font-size: clamp(1.25rem, 2.2vw, 1.75rem); margin: 0; }
+.candidate-description { color: var(--text-secondary); margin: .25rem 0 0; max-width: 75ch; }
+
+.candidate-progress-container { margin-bottom: 1rem; }
+.candidate-progress-info { display: flex; justify-content: space-between; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.candidate-progress-bar { width: 100%; height: 12px; background: var(--bg-subtle); border-radius: 999px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--border-color); }
+.candidate-progress-fill { height: 100%; background: linear-gradient(90deg, var(--brand-primary) 0%, var(--brand-accent) 100%); transition: width .4s ease; border-radius: 999px; }
+.dark .candidate-progress-bar { background: rgba(255,255,255,0.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); }
+.dark .candidate-progress-info { color: #e5e7eb; }
+
+.candidate-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); overflow: hidden; }
+.candidate-card-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-color); font-weight: 700; display:flex; justify-content: space-between; align-items: center; }
+.candidate-card-header h3 { margin: 0; font-size: 1.125rem; }
+.candidate-card-body { padding: 1.25rem; }
+
+.recording-overlay { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: flex-end; padding: .75rem; pointer-events: none; }
+.recording-indicator { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+
+/* Timer badge displayed inside the video overlay */
+.timer-badge {
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: .35rem .6rem;
+  border-radius: 999px;
+  color: #111827; /* default for light */
+  background: rgba(255,255,255,0.85);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+.timer-dot { width: 8px; height: 8px; background: #dc3545; border-radius: 50%; box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); animation: pulse 1.5s infinite; }
+
+.dark .timer-badge { color: #ffffff; background: rgba(0,0,0,0.55); border-color: rgba(255,255,255,0.18); }
+
+/* Time display pill beside question title */
+.time-display { display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; }
+.time-display.preparing { color: var(--text-secondary); }
+.time-display.recording { color: #dc3545; }
+.time-label { font-size: .85rem; opacity: .85; }
+.time-remaining { font-variant-numeric: tabular-nums; padding: .15rem .5rem; border-radius: .5rem; background: var(--bg-subtle); }
+.dark .time-remaining { background: rgba(255,255,255,0.08); color: #fff; }
+
+/* Instructions list polishing */
+.instructions-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .75rem; }
+.instruction-item { display:flex; gap:.75rem; align-items:flex-start; padding: .5rem; border-radius: 12px; }
+.instruction-icon { width: 36px; height: 36px; border-radius: 10px; display:flex; align-items:center; justify-content:center; background: var(--bg-subtle); border: 1px solid var(--border-color); }
+.instruction-content h5 { margin: 0 0 .25rem; font-size: 1rem; }
+.instruction-content p { margin: 0; color: var(--text-secondary); }
+.dark .instruction-icon { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.18); }
+
+/* Network status card */
+.network-status { margin-top: 1rem; border: 1px solid var(--border-color); border-radius: 12px; padding: .75rem; background: var(--bg-subtle); }
+.network-status-header { display:flex; align-items:center; gap:.5rem; font-weight:700; margin-bottom: .25rem; }
+.network-details { display:flex; gap: 1rem; color: var(--text-secondary); }
+.network-good { border-left: 4px solid #16a34a; }
+.network-moderate { border-left: 4px solid #f59e0b; }
+.network-poor { border-left: 4px solid #dc2626; }
+.dark .network-status { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.18); }
+.dark .network-details { color: #d1d5db; }
+
+/* Media check badges */
+.media-check { display:flex; gap: 1rem; margin: 1rem 0; }
+.media-check-item { display:flex; align-items:center; gap:.5rem; padding: .5rem .75rem; border-radius: 999px; background: var(--bg-subtle); border: 1px solid var(--border-color); font-weight: 600; }
+.media-icon { color: var(--brand-primary); }
+.dark .media-check-item { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.18); }
+
+/* Buttons and focus visibility */
+.candidate-start-btn { border-radius: 12px; padding: .7rem 1.25rem; font-weight: 700; }
+.stop-recording-btn { border-radius: 12px; font-weight: 700; }
+.candidate-container .btn:focus-visible { outline: 3px solid rgba(59,130,246,.5); outline-offset: 2px; }
+
+/* Improve video container shadow for visual depth */
+.video-container { box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
+.dark .video-container { box-shadow: 0 14px 40px rgba(0,0,0,0.6); }
+
+/* Question text */
+.question-text p { font-size: clamp(1.1rem, 1.8vw, 1.3rem); line-height: 1.8; margin: 0 0 1rem; letter-spacing: 0.1px; }
+.dark .question-text p { color: #f5f6f7; }
+
+/* Centered warning overlay when multiple faces are detected */
+.multi-face-warning {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(92%, 680px);
+  text-align: center;
+  background: rgba(220,53,69,0.92);
+  color: #fff;
+  padding: .75rem 1rem;
+  border-radius: .5rem;
+  border: 1px solid rgba(255,255,255,0.25);
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  pointer-events: none;
+  z-index: 3;
+}
+.dark .multi-face-warning { background: rgba(220,53,69,0.85); border-color: rgba(255,255,255,0.2); }
+
 h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   margin-bottom: 1rem;
@@ -331,22 +563,22 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .alert-info {
-  background-color: rgba(23, 162, 184, 0.1);
-  color: #0c5460;
-  border-left: 4px solid #17a2b8;
+  background-color: rgba(15, 23, 42, 0.06);
+  color: var(--text-color);
+  border-left: 4px solid var(--accent-color);
 }
 
 /* Barre de progression */
 .progress {
   height: 8px;
   border-radius: 4px;
-  background-color: #e9ecef;
+  background-color: var(--light-bg);
   overflow: hidden;
   margin-bottom: 1.5rem;
 }
 
 .progress-bar {
-  background-color: var(--primary-color);
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
   transition: width 0.6s ease;
 }
 

@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import api from "../../services/api";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import LoadingSpinner from "../../components/LoadingSpinner";
-import "./RecruiterDashboard.css";
+import { FormControl, InputLabel, Select, MenuItem } from "@mui/material";
 import { fetchCampaigns } from "../../services/campaigns";
-import InviteModal from "../../components/InviteModal"; // add this import
+import InviteModal from "../../components/InviteModal";
+import { WelcomeSection } from "../../components/Dashboard/WelcomeSection";
+import "../../App.css";
 
 export default function RecruiterDashboard() {
   const [metrics, setMetrics] = useState(null);
@@ -13,15 +15,19 @@ export default function RecruiterDashboard() {
   const [error, setError] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
   const [campaignsLoading, setCampaignsLoading] = useState(true);
-  const { logout, user } = useAuth();
-  const nav = useNavigate();
+  const [activityFilter, setActivityFilter] = useState('all'); // all | active | inactive
+  const { user } = useAuth();
 
-  // show success message passed via navigation state
   const location = useLocation();
   const [banner, setBanner] = useState(location.state?.success || null);
+  const [showInvite, setShowInvite] = useState(false);
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+  const [toast, setToast] = useState(null); // { message }
 
-  const [showInvite, setShowInvite] = useState(false); // { changed code }
-  const [selectedCampaignId, setSelectedCampaignId] = useState(null); // { changed code }
+  const showToast = (message) => {
+    setToast({ message });
+    window.setTimeout(() => setToast(null), 1000);
+  };
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -45,23 +51,22 @@ export default function RecruiterDashboard() {
   useEffect(() => {
     if (location.state?.success) {
       setBanner(location.state.success);
-      // remove state from history to avoid showing again on back/refresh
       try {
         window.history.replaceState({}, document.title);
       } catch (e) {}
       const t = setTimeout(() => setBanner(null), 6000);
       return () => clearTimeout(t);
     }
-    // eslint-disable-next-line
   }, [location.state]);
 
   useEffect(() => {
-    // fetch campaigns list for this recruiter
     const loadCampaigns = async () => {
       try {
         setCampaignsLoading(true);
-        const data = await fetchCampaigns();
-        // API may return { results: [...], count: ... } or an array
+        const params = {};
+        if (activityFilter === 'active') params.is_active = true;
+        if (activityFilter === 'inactive') params.is_active = false;
+        const data = await fetchCampaigns(params);
         const list = Array.isArray(data) ? data : data.results || [];
         setCampaigns(list);
       } catch (err) {
@@ -73,196 +78,224 @@ export default function RecruiterDashboard() {
     };
 
     loadCampaigns();
-  }, []);
+  }, [activityFilter]);
 
   if (loading) {
     return (
-      <div className="dashboard-container">
-        <div className="dashboard-loading">
-          <LoadingSpinner size="large" />
-          <p>Chargement des données...</p>
-        </div>
+      <div className="dashboard-container text-center py-4">
+        <LoadingSpinner size="large" />
+        <div className="mt-2 text-muted">Chargement des données...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="dashboard-container">
-        <div className="dashboard-error">
-          <div className="error-icon">⚠️</div>
-          <h3>Erreur de chargement</h3>
-          <p>{error}</p>
-          <button
-            className="retry-button"
-            onClick={() => window.location.reload()}
-          >
-            Réessayer
-          </button>
+      <div className="dashboard-container py-4">
+        <div className="card error-card">
+          <div className="card-header">
+            <strong>Erreur de chargement</strong>
+          </div>
+          <div className="card-body">
+            <p>{error}</p>
+            <button
+              className="btn btn-danger"
+              onClick={() => window.location.reload()}
+            >
+              Réessayer
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-page">
-      {banner && (
-        <div
-          style={{
-            background: "#e6ffed",
-            border: "1px solid #b7f2c6",
-            padding: 12,
-            borderRadius: 6,
-            marginBottom: 12,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div style={{ color: "#065f32" }}>{banner}</div>
-          <button
-            onClick={() => setBanner(null)}
-            style={{
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              color: "#065f32",
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
+    <div className="dashboard-container allow-hover">
       <div className="dashboard-content">
-        {/* Mes campagnes */}
-        <section style={{ marginBottom: 20 }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 12,
-            }}
-          >
-            <h2 className="section-title">Mes campagnes</h2>
-            <div>
-              <button
-                className="btn"
-                onClick={() => nav("/recruiter/campaigns/create")}
-              >
-                Créer
-              </button>
+        {toast && (
+          <div className="toast-notice" role="status" aria-live="polite">{toast.message}</div>
+        )}
+        {banner && (
+          <div className="alert alert-success mb-4">{banner}</div>
+        )}
+
+        {/* Welcome Section */}
+        <div className="mb-4">
+          <WelcomeSection 
+            userName={user?.first_name || user?.username || user?.email}
+            firstName={user?.first_name}
+          />
+        </div>
+
+        {/* Metrics */}
+        {metrics && (
+          <section>
+            <h3 className="section-title">Performances Globales</h3>
+            <div className="metrics-grid">
+              <div className="metric-card">
+                <div className="metric-value">
+                  {metrics.total_campaigns || 0}
+                </div>
+                <div className="metric-label">Campagnes Actives</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-value">
+                  {metrics.total_candidates || 0}
+                </div>
+                <div className="metric-label">Candidats Total</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-value">
+                  {metrics.completed_interviews || 0}
+                </div>
+                <div className="metric-label">Entretiens Complétés</div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-value">
+                  {metrics.avg_completion_rate || 0}%
+                </div>
+                <div className="metric-label">Taux de Complétion</div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Actions */}
+        <section className="actions-section">
+          <div className="section-header">
+            <h3 className="section-title">Actions Rapides</h3>
+          </div>
+          <div className="actions-grid">
+            <Link to="/recruiter/campaigns" className="action-card">
+              <div className="action-icon">📋</div>
+              <div>
+                <h3>Gérer les campagnes</h3>
+                <p>Créez et modifiez vos campagnes d'entretien</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
+
+            <Link to="/recruiter/sessions" className="action-card">
+              <div className="action-icon">🎥</div>
+              <div>
+                <h3>Voir les sessions</h3>
+                <p>Suivez les entretiens en cours</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
+
+            <Link to="/recruiter/candidates" className="action-card">
+              <div className="action-icon">👤</div>
+              <div>
+                <h3>Candidats</h3>
+                <p>Gérez votre pool de talents</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
+
+            <Link to="/recruiter/analytics" className="action-card">
+              <div className="action-icon">📈</div>
+              <div>
+                <h3>Analytiques</h3>
+                <p>Mesures de performance détaillées</p>
+              </div>
+              <div className="action-arrow">→</div>
+            </Link>
+          </div>
+        </section>
+
+        {/* Campaigns */}
+        <section className="campaigns-section">
+          <div className="section-header d-flex align-items-center gap-2">
+            <h3 className="section-title mb-0">Mes Campagnes</h3>
+            <div className="ms-auto d-flex align-items-center gap-2">
+              <FormControl size="small" sx={{ minWidth: 180 }}>
+                <InputLabel id="activityFilter-label" sx={{ color: 'text.primary' }}>Activité</InputLabel>
+                <Select
+                  labelId="activityFilter-label"
+                  id="activityFilter"
+                  value={activityFilter}
+                  label="Activité"
+                  onChange={(e) => setActivityFilter(e.target.value)}
+                  MenuProps={{
+                    PaperProps: { className: 'menu-paper-dark' },
+                  }}
+                >
+                  <MenuItem value="all">Toutes</MenuItem>
+                  <MenuItem value="active">Actives</MenuItem>
+                  <MenuItem value="inactive">Inactives</MenuItem>
+                </Select>
+              </FormControl>
             </div>
           </div>
 
           {campaignsLoading ? (
-            <div style={{ padding: 16 }}>
-              <LoadingSpinner /> Chargement des campagnes...
+            <div className="card text-center p-4">
+              <LoadingSpinner />
+              <p className="mt-2 text-muted">Chargement des campagnes...</p>
             </div>
           ) : campaigns.length === 0 ? (
-            <div style={{ padding: 16 }}>
-              <p>Aucune campagne trouvée.</p>
-              <Link
-                to="/recruiter/campaigns/create"
-                className="btn btn-primary"
-              >
+            <div className="card text-center p-4 empty-state">
+              <div className="empty-icon">📁</div>
+              <h3>Aucune campagne trouvée</h3>
+              <p>Commencez par créer votre première campagne d'entretien</p>
+              <Link to="/recruiter/campaigns/create" className="btn btn-primary mt-2">
                 Créer une campagne
               </Link>
             </div>
           ) : (
-            <div
-              className="campaigns-grid"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))",
-                gap: 12,
-              }}
-            >
-              {campaigns.map((c) => (
-                <div
-                  key={c.id || c.slug}
-                  className="campaign-card"
-                  style={{
-                    padding: 12,
-                    borderRadius: 8,
-                    background: "#fff",
-                    border: "1px solid #eef2f7",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "start",
-                      marginBottom: 8,
-                    }}
-                  >
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: 16 }}>
-                        {c.title || c.name || "—"}
-                      </h3>
-                      <div
-                        style={{
-                          color: "#64748b",
-                          fontSize: 13,
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {campaigns.map((campaign) => (
+                <div key={campaign.id} className="campaign-card card h-100">
+                  <div className="card-header flex justify-between items-center">
+                    <span className="fw-semibold text-truncate">
+                      {campaign.title || "Sans titre"}
+                    </span>
+                    <span className={`badge ${campaign.is_active ? "bg-success" : "bg-secondary"}`}>
+                      {campaign.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </div>
+                  <div className="card-body">
+                    <p className="mb-3 small" style={{ color: 'var(--text-on-card)' }}>
+                      <span>description : </span>
+                      {campaign.description
+                        ? campaign.description.length > 100
+                          ? `${campaign.description.substring(0, 100)}...`
+                          : campaign.description
+                        : "Aucune description"}
+                    </p>
+                    <div className="flex gap-2 flex-wrap">
+                      <Link to={`/recruiter/campaigns/${campaign.id}`} className="btn btn-outline-primary btn-sm">
+                        Voir
+                      </Link>
+                      <button
+                        className={`btn btn-outline-primary btn-sm invite-btn ${((Boolean(campaign.end_date) && new Date(campaign.end_date) < new Date()) || !campaign.is_active) ? 'invite-disabled' : ''}`}
+                        aria-disabled={(Boolean(campaign.end_date) && new Date(campaign.end_date) < new Date()) || !campaign.is_active}
+                        title={((Boolean(campaign.end_date) && new Date(campaign.end_date) < new Date()) || !campaign.is_active) ? "Campagne expirée ou inactive" : ""}
+                        onClick={() => {
+                          const isDisabled = ((Boolean(campaign.end_date) && new Date(campaign.end_date) < new Date()) || !campaign.is_active);
+                          if (isDisabled) {
+                            showToast("Impossible d'inviter car la campagne est arrivée à sa date d'expiration.");
+                            return;
+                          }
+                          setSelectedCampaignId(campaign.id);
+                          setShowInvite(true);
                         }}
                       >
-                        {c.description
-                          ? c.description.slice(0, 100) +
-                            (c.description.length > 100 ? "…" : "")
-                          : "Pas de description"}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: c.is_active ? "#0b5ed7" : "#999",
-                        }}
-                      >
-                        {c.is_active ? "Active" : "Inactive"}
-                      </div>
+                        Inviter
+                      </button>
                     </div>
                   </div>
-
-                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                    <Link
-                      to={`/recruiter/campaigns/${c.id || c.slug}`}
-                      className="btn btn-ghost"
-                    >
-                      Voir
-                    </Link>
-                    <Link
-                      to={`/recruiter/campaigns/${c.id || c.slug}/edit`}
-                      className="btn"
-                    >
-                      Modifier
-                    </Link>
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => {
-                        setSelectedCampaignId(c.id || c.slug);
-                        setShowInvite(true);
-                      }}
-                    >
-                      Inviter
-                    </button>
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 10,
-                      fontSize: 12,
-                      color: "#666",
-                    }}
-                  >
-                    {c.start_date
-                      ? `Débute: ${new Date(c.start_date).toLocaleDateString()}`
-                      : ""}
-                    {c.end_date
-                      ? ` · Termine: ${new Date(c.end_date).toLocaleDateString()}`
-                      : ""}
+                  <div className="card-footer small flex justify-between" style={{ color: 'var(--text-on-card)' }}>
+                    <span>date de validité : </span>
+                    <span>
+                      du {campaign.start_date && new Date(campaign.start_date).toLocaleString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} 
+                    </span>
+                    <span> au </span>
+                    <span> 
+                      {campaign.end_date && new Date(campaign.end_date).toLocaleString(undefined, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -270,190 +303,7 @@ export default function RecruiterDashboard() {
           )}
         </section>
 
-        {/* Existing sections (metrics, actions, activity...) follow */}
-        {/* Welcome section */}
-        <div className="welcome-section">
-          <div className="welcome-content">
-            <h1>Bonjour, {user?.name || "Recruteur"} 👋</h1>
-            <p>Voici votre aperçu des performances et activités récentes</p>
-          </div>
-          <div className="welcome-illustration">
-            <span className="illustration-icon">📊</span>
-          </div>
-        </div>
-
-        {/* Metrics grid */}
-        <section className="metrics-section">
-          <h2 className="section-title">Aperçu des performances</h2>
-          <div className="metrics-grid">
-            <div className="metric-card metric-card-primary">
-              <div className="metric-icon">🎯</div>
-              <div className="metric-content">
-                <div className="metric-value">
-                  {metrics.total_campaigns ?? "—"}
-                </div>
-                <div className="metric-label">Campagnes totales</div>
-              </div>
-            </div>
-
-            <div className="metric-card metric-card-success">
-              <div className="metric-icon">🔥</div>
-              <div className="metric-content">
-                <div className="metric-value">
-                  {metrics.active_campaigns ?? "—"}
-                </div>
-                <div className="metric-label">Campagnes actives</div>
-              </div>
-            </div>
-
-            <div className="metric-card metric-card-info">
-              <div className="metric-icon">👥</div>
-              <div className="metric-content">
-                <div className="metric-value">
-                  {metrics.total_candidates ?? "—"}
-                </div>
-                <div className="metric-label">Candidats total</div>
-              </div>
-            </div>
-
-            <div className="metric-card metric-card-warning">
-              <div className="metric-icon">✅</div>
-              <div className="metric-content">
-                <div className="metric-value">
-                  {metrics.completed_interviews ?? "—"}
-                </div>
-                <div className="metric-label">Entretiens complétés</div>
-              </div>
-            </div>
-
-            <div className="metric-card metric-card-accent">
-              <div className="metric-icon">⭐</div>
-              <div className="metric-content">
-                <div className="metric-value">
-                  {metrics.average_rating
-                    ? `${metrics.average_rating}/5`
-                    : "—"}
-                </div>
-                <div className="metric-label">Note moyenne</div>
-              </div>
-            </div>
-
-            <div className="metric-card metric-card-purple">
-              <div className="metric-icon">🎥</div>
-              <div className="metric-content">
-                <div className="metric-value">
-                  {metrics.open_sessions ?? "—"}
-                </div>
-                <div className="metric-label">Sessions en cours</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Quick actions */}
-        <section className="actions-section">
-          <h2 className="section-title">Actions rapides</h2>
-          <div className="actions-grid">
-            <Link to="/recruiter/campaigns" className="action-card">
-              <div className="action-icon">📋</div>
-              <div className="action-content">
-                <h3>Gérer les campagnes</h3>
-                <p>Créez et modifiez vos campagnes de recrutement</p>
-              </div>
-              <div className="action-arrow">→</div>
-            </Link>
-
-            <Link to="/recruiter/sessions" className="action-card">
-              <div className="action-icon">🎥</div>
-              <div className="action-content">
-                <h3>Voir les sessions</h3>
-                <p>Consultez les sessions d'entretien en cours</p>
-              </div>
-              <div className="action-arrow">→</div>
-            </Link>
-
-            <Link to="/recruiter/candidates" className="action-card">
-              <div className="action-icon">👤</div>
-              <div className="action-content">
-                <h3>Candidats</h3>
-                <p>Gérez votre pool de candidats</p>
-              </div>
-              <div className="action-arrow">→</div>
-            </Link>
-
-            <Link to="/recruiter/analytics" className="action-card">
-              <div className="action-icon">📈</div>
-              <div className="action-content">
-                <h3>Analytiques</h3>
-                <p>Analyses détaillées des performances</p>
-              </div>
-              <div className="action-arrow">→</div>
-            </Link>
-          </div>
-        </section>
-
-        {/* Recent activity */}
-        <section className="activity-section">
-          <div className="section-header">
-            <h2 className="section-title">Activité récente</h2>
-            <Link to="/recruiter/activity" className="view-all-link">
-              Voir tout →
-            </Link>
-          </div>
-
-          <div className="activity-list">
-            {(metrics.recent_activity || [])
-              .slice(0, 6)
-              .map((activity, index) => (
-                <div key={index} className="activity-item">
-                  <div className="activity-icon">
-                    {getActivityIcon(activity.type)}
-                  </div>
-                  <div className="activity-content">
-                    <div className="activity-title">
-                      {activity.title || activity.description || "Nouvelle activité"}
-                    </div>
-                    <div className="activity-meta">
-                      <span className="activity-time">
-                        {formatTime(activity.created_at)}
-                      </span>
-                      {activity.campaign && (
-                        <span className="activity-campaign">
-                          {activity.campaign}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="activity-badge">
-                    {getActivityBadge(activity.type)}
-                  </div>
-                </div>
-              ))}
-
-            {(!metrics.recent_activity ||
-              metrics.recent_activity.length === 0) && (
-              <div className="empty-state">
-                <div className="empty-icon">📊</div>
-                <h3>Aucune activité récente</h3>
-                <p>Les activités apparaîtront ici</p>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Stats chart (placeholder) */}
-        <section className="stats-section">
-          <h2 className="section-title">Performances mensuelles</h2>
-          <div className="stats-placeholder">
-            <div className="stats-placeholder-content">
-              <span className="stats-icon">📈</span>
-              <p>Graphique de performances</p>
-              <small>Intégration analytics à venir</small>
-            </div>
-          </div>
-        </section>
-
-        {/* render InviteModal when requested */}
+        {/* Invite Modal */}
         {showInvite && selectedCampaignId && (
           <InviteModal
             campaignId={selectedCampaignId}
@@ -466,45 +316,4 @@ export default function RecruiterDashboard() {
       </div>
     </div>
   );
-}
-
-// Helper functions
-function getActivityIcon(type) {
-  const icons = {
-    campaign: "🎯",
-    candidate: "👤",
-    interview: "🎥",
-    evaluation: "⭐",
-    default: "🔔",
-  };
-  return icons[type] || icons.default;
-}
-
-function getActivityBadge(type) {
-  const badges = {
-    campaign: "Campagne",
-    candidate: "Candidat",
-    interview: "Entretien",
-    evaluation: "Évaluation",
-    default: "Activité",
-  };
-  return badges[type] || badges.default;
-}
-
-function formatTime(timestamp) {
-  if (!timestamp) return "Récemment";
-
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now - date;
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-
-  if (hours < 1) return "À l'instant";
-  if (hours < 24) return `Il y a ${hours}h`;
-  if (hours < 48) return "Hier";
-
-  return date.toLocaleDateString("fr-FR", {
-    day: "numeric",
-    month: "short",
-  });
 }

@@ -9,9 +9,9 @@ import Header from "../../components/Header";
  */
 export default function RecruiterLayout() {
   return (
-    <div style={{ minHeight: "100vh", background: "#f6f8fb" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg-body)", display: 'flex', flexDirection: 'column' }}>
       <Header title="Tableau recruteur" showUser={true} showNavigation={true} />
-      <main style={{ padding: 20, maxWidth: 1100, margin: "0 auto" }}>
+      <main style={{ flex: 1, padding: '20px 24px', width: '100%', maxWidth: '100%', margin: 0 }}>
         <Outlet />
       </main>
     </div>

@@ -1,6 +1,10 @@
 import axios from "axios";
 
-const BASE = process.env.REACT_APP_API_BASE || "http://127.0.0.1:8000/api/";
+// Prefer proxy path by default, and accept either REACT_APP_API_BASE or REACT_APP_API_BASE_URL
+const BASE =
+  process.env.REACT_APP_API_BASE ||
+  process.env.REACT_APP_API_BASE_URL ||
+  "/api/";
 
 const api = axios.create({
   baseURL: BASE,

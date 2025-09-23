@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Card, Spinner } from 'react-bootstrap';
 import { FaPlay, FaStop, FaExclamationTriangle, FaCheckCircle, FaVideo, FaMicrophone, FaMoon, FaSun } from 'react-icons/fa';
 import api, { interviewApi } from '../../services/api';
-import * as faceapi from 'face-api.js';
 import './CandidateLanding.css';
 
 const STAGES = {
@@ -59,158 +58,18 @@ export default function CandidateLanding() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [isStarting, setIsStarting] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [recordedBlobs, setRecordedBlobs] = useState([]);
   const [error, setError] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(null);
-  const [isRecording, setIsRecording] = useState(false);
+  // removed unused states (recordedBlobs, isSubmitting, uploadProgress, isRecording)
   const [mediaError, setMediaError] = useState(null);
   const [networkQuality, setNetworkQuality] = useState(null);
   const [networkDetails, setNetworkDetails] = useState(null);
-  // Multi-face detection state
-  const [faceApiReady, setFaceApiReady] = useState(false);
-  const [modelType, setModelType] = useState(null); // 'ssd' | 'tiny'
-  const [multiFaceWarning, setMultiFaceWarning] = useState(false);
-  const faceCheckTimerRef = useRef(null);
-
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
-  // Stabilization refs for detection
-  const consecutiveMultiRef = useRef(0);
-  const consecutiveSingleRef = useRef(0);
-  const lastDetectionsRef = useRef([]);
-  const SHOW_FACE_DEBUG = false; // hide debug boxes by default for cleaner UI
   
-  // Load model(s) from /models: try ssdMobilenetv1 first, then fallback to tinyFaceDetector
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        await faceapi.nets.ssdMobilenetv1.loadFromUri('/models');
-        if (mounted) {
-          setModelType('ssd');
-          setFaceApiReady(true);
-          console.log('[FaceDetect] Modèle actif: ssdMobilenetv1 (local)');
-          return;
-        }
-      } catch (e) {
-        console.warn('[FaceDetect] ssdMobilenetv1 non disponible en local, tentative tinyFaceDetector…');
-      }
-      try {
-        await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
-        if (mounted) {
-          setModelType('tiny');
-          setFaceApiReady(true);
-          console.log('[FaceDetect] Modèle actif: tinyFaceDetector (local)');
-          return;
-        }
-      } catch (e) {
-        console.warn('[FaceDetect] tinyFaceDetector non disponible en local');
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  // Run detection every 300ms during preparation/recording
-  useEffect(() => {
-    const shouldRun = (stage === STAGES.PREPARATION || stage === STAGES.RECORDING);
-    const video = videoRef.current;
-    const detect = async () => {
-      if (!shouldRun || !faceApiReady || !video) return;
-      if (!video.videoWidth || !video.videoHeight || video.readyState < 2) return;
-      try {
-        let detections = [];
-        if (modelType === 'ssd') {
-          detections = await faceapi.detectAllFaces(
-            video,
-            new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })
-          );
-        } else if (modelType === 'tiny') {
-          detections = await faceapi.detectAllFaces(
-            video,
-            new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.2 })
-          );
-        }
-        // Filter out extremely small boxes (noise) based on area threshold (>= 2% of frame)
-        const vw = video.videoWidth || 1;
-        const vh = video.videoHeight || 1;
-        const minArea = vw * vh * 0.005;
-        lastDetectionsRef.current = detections || [];
-        const valid = lastDetectionsRef.current.filter(d => {
-          const b = d.box || d;
-          const w = b.width || 0; const h = b.height || 0;
-          return (w * h) >= minArea;
-        });
-        const count = valid.length;
-        console.log('Nombre de visages:', count);
-        // Hysteresis: require N consecutive frames to switch states
-        const upThreshold = 3;   // ~900ms at 300ms interval
-        const downThreshold = 5; // ~1.5s to clear
-        if (count > 1) {
-          consecutiveMultiRef.current += 1;
-          consecutiveSingleRef.current = 0;
-          if (consecutiveMultiRef.current >= upThreshold && !multiFaceWarning) {
-            setMultiFaceWarning(true);
-          }
-        } else {
-          consecutiveSingleRef.current += 1;
-          consecutiveMultiRef.current = 0;
-          if (consecutiveSingleRef.current >= downThreshold && multiFaceWarning) {
-            setMultiFaceWarning(false);
-          }
-        }
-
-        // Draw debug overlay (optional)
-        if (SHOW_FACE_DEBUG) {
-          const canvas = canvasRef.current;
-          if (canvas) {
-            const cw = video.clientWidth || video.videoWidth;
-            const ch = video.clientHeight || video.videoHeight;
-            // Ensure canvas matches displayed size
-            canvas.width = cw;
-            canvas.height = ch;
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, cw, ch);
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.85)';
-            ctx.lineWidth = 3;
-            ctx.fillStyle = 'rgba(255,0,0,0.35)';
-            ctx.font = '12px sans-serif';
-            // Scale from video intrinsic dims to displayed dims
-            const sx = cw / (video.videoWidth || cw);
-            const sy = ch / (video.videoHeight || ch);
-            (lastDetectionsRef.current || []).forEach(d => {
-              const b = d.box || d;
-              const x = (b.x || b.left || 0) * sx;
-              const y = (b.y || b.top || 0) * sy;
-              const w = (b.width || 0) * sx;
-              const h = (b.height || 0) * sy;
-              ctx.strokeRect(x, y, w, h);
-              ctx.fillRect(x, y - 16, Math.max(60, 40), 16);
-              const score = typeof d.score === 'number' ? d.score.toFixed(2) : '';
-              ctx.fillStyle = '#fff';
-              ctx.fillText(`face ${score}`, x + 4, y - 4);
-              ctx.fillStyle = 'rgba(255,0,0,0.35)';
-            });
-          }
-        }
-      } catch (err) {
-        // ignore transient errors
-      }
-    };
-    if (shouldRun) {
-      faceCheckTimerRef.current = window.setInterval(detect, 300);
-      detect();
-    }
-    return () => {
-      if (faceCheckTimerRef.current) {
-        clearInterval(faceCheckTimerRef.current);
-        faceCheckTimerRef.current = null;
-      }
-    };
-  }, [stage, faceApiReady, modelType]);
+  
+  // Multi-face detection removed
   const preparationTimeRef = useRef(0);
   const recordingTimeRef = useRef(0);
   const isStoppingRef = useRef(false);
@@ -453,7 +312,6 @@ export default function CandidateLanding() {
     clearTimers();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
-      setIsRecording(false);
     } else {
       isStoppingRef.current = false;
     }
@@ -583,7 +441,6 @@ export default function CandidateLanding() {
       };
 
       mediaRecorder.start(100);
-      setIsRecording(true);
       recordingTimeRef.current = Date.now();
       setStage(STAGES.RECORDING);
 
@@ -594,7 +451,7 @@ export default function CandidateLanding() {
       setError(err.message || "Erreur lors du démarrage de l'enregistrement");
       setStage(STAGES.ERROR);
     }
-  }, [session, stopRecording, startCountdown, stopMediaTracks, currentQuestionIndex, accessToken]);
+  }, [session, stopRecording, startCountdown, stopMediaTracks, startPreparation, currentQuestionIndex, accessToken]);
 
   const formatTime = (sec) => {
     const s = Math.max(0, Number(sec) || 0);
@@ -765,9 +622,6 @@ export default function CandidateLanding() {
                 playsInline 
                 muted 
               />
-              {SHOW_FACE_DEBUG && (
-                <canvas ref={canvasRef} className="face-debug-canvas"/>
-              )}
               {(stage === STAGES.RECORDING || stage === STAGES.PREPARATION) && (
                 <>
                   <div className="recording-overlay">
@@ -778,11 +632,6 @@ export default function CandidateLanding() {
                       </span>
                     </div>
                   </div>
-                  {multiFaceWarning && (
-                    <div className="multi-face-warning" role="status" aria-live="polite">
-                      Nous avons détecté plusieurs visages dans le cadre. Veuillez vous assurer d'être seul face à la caméra.
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -811,7 +660,7 @@ export default function CandidateLanding() {
             </div>
             <h3>Entretien terminé</h3>
             <p>Merci pour votre participation. Toutes vos réponses ont été enregistrées avec succès.</p>
-            <Button variant="primary" onClick={() => navigate('/')}>Retour à l'accueil</Button>
+            <Button variant="primary" onClick={() => navigate('/login')}>Retour à l'accueil</Button>
           </div>
         </Card>
       )}

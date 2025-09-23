@@ -19,7 +19,16 @@ export default function Login() {
 
     try {
       await login(emailOrUsername.trim(), password);
-      navigate("/recruiter/dashboard", { replace: true });
+
+      // Redirection basée sur le rôle de l'utilisateur
+      const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}');
+      const userRole = userInfo.role || userInfo.user_type;
+
+      if (userRole === 'candidate') {
+        navigate("/candidate/dashboard", { replace: true });
+      } else {
+        navigate("/recruiter/dashboard", { replace: true });
+      }
     } catch (err) {
       const errorMessage =
         err?.response?.data?.detail ||

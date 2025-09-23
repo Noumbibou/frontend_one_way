@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { fetchCampaign } from "../../services/campaigns";
+import api from "../../services/api";
 import LoadingSpinner from "../../components/LoadingSpinner";
 import InviteModal from "../../components/InviteModal";
 import "./CampaignDetail.css"; // Fichier CSS pour les styles
@@ -9,6 +10,7 @@ export default function CampaignDetail() {
   const { id } = useParams();
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [sessionsForCampaign, setSessionsForCampaign] = useState([]);
   const [showInvite, setShowInvite] = useState(false);
   const nav = useNavigate();
   const location = useLocation();
@@ -19,6 +21,15 @@ export default function CampaignDetail() {
         setLoading(true);
         const data = await fetchCampaign(id);
         setCampaign(data);
+        // Fetch sessions tied to this campaign to compute live rates
+        try {
+          const res = await api.get("sessions/", { params: { campaign: id } });
+          const list = Array.isArray(res.data) ? res.data : (res.data.results || []);
+          setSessionsForCampaign(list);
+        } catch (e) {
+          console.warn("Impossible de charger les sessions de la campagne", e);
+          setSessionsForCampaign([]);
+        }
       } catch (err) {
         console.error("Erreur fetch campaign:", err);
       } finally {
@@ -57,11 +68,23 @@ export default function CampaignDetail() {
   const isExpired = (Boolean(campaign.end_date) && new Date(campaign.end_date) < new Date());
   const isDisabled = isExpired || !campaign.is_active;
 
-  // Compute stats from campaign.sessions
-  const sessions = Array.isArray(campaign.sessions) ? campaign.sessions : [];
+  // Compute stats using live sessions fallback when available
+  const sessions = sessionsForCampaign.length ? sessionsForCampaign : (Array.isArray(campaign.sessions) ? campaign.sessions : []);
   const invitedCount = sessions.length;
-  const respondersCount = sessions.filter(s => (s?.responses_count || 0) > 0).length;
+  const respondersCount = sessions.filter(s => {
+    const rc = s.responses_count ?? (Array.isArray(s.responses) ? s.responses.length : 0);
+    return (rc || 0) > 0;
+  }).length;
   const responseRate = invitedCount ? Math.round((respondersCount / invitedCount) * 100) : 0;
+  // Completion moyen par session (si answered/total disponibles)
+  const completionValues = sessions
+    .map(s => {
+      const answered = Number(s.answered_questions ?? s.answers_count ?? 0);
+      const total = Number(s.total_questions ?? s.questions_count ?? 0);
+      return total > 0 ? (answered / total) * 100 : null;
+    })
+    .filter(v => v !== null);
+  const avgCompletion = completionValues.length ? Math.round(completionValues.reduce((a,b)=>a+b,0) / completionValues.length) : 0;
 
   return (
     <div className="campaign-detail-container">
@@ -168,6 +191,10 @@ export default function CampaignDetail() {
             <div className="stat-card">
               <div className="stat-value">{responseRate}%</div>
               <div className="stat-label">Taux de réponse</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{avgCompletion}%</div>
+              <div className="stat-label">Taux de complétion moyen</div>
             </div>
           </div>
         </section>

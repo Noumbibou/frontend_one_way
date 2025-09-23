@@ -10,20 +10,29 @@ export const AuthProvider = ({ children }) => {
   const nav = useNavigate();
 
   const setTokensAndHeader = (access, refresh) => {
-    if (access) {
-      localStorage.setItem("access_token", access);
-      api.defaults.headers.common["Authorization"] = `Bearer ${access}`;
-    }
-    if (refresh) localStorage.setItem("refresh_token", refresh);
+    try {
+      if (access) {
+        sessionStorage.setItem("access_token", access);
+        api.defaults.headers.common["Authorization"] = `Bearer ${access}`;
+        // also mirror to localStorage for page reload fallback
+        localStorage.setItem("access_token", access);
+      }
+      if (refresh) {
+        sessionStorage.setItem("refresh_token", refresh);
+        localStorage.setItem("refresh_token", refresh);
+      }
+    } catch (_) {}
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
+    const token = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem("access_token"))
+      || (typeof localStorage !== 'undefined' && localStorage.getItem("access_token"));
     if (token) {
       api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
       // Try to restore user info from localStorage if available
       try {
-        const stored = localStorage.getItem("user_info");
+        const stored = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem("user_info"))
+          || (typeof localStorage !== 'undefined' && localStorage.getItem("user_info"));
         if (stored) {
           const parsed = JSON.parse(stored);
           setUser({ ...parsed, authenticated: true });
@@ -34,6 +43,7 @@ export const AuthProvider = ({ children }) => {
                 if (profile) {
                   const nextUser = { ...parsed, ...profile, authenticated: true };
                   setUser(nextUser);
+                  try { sessionStorage.setItem("user_info", JSON.stringify(nextUser)); } catch (_) {}
                   try { localStorage.setItem("user_info", JSON.stringify(nextUser)); } catch (_) {}
                 }
               } catch (_) {}
@@ -48,6 +58,7 @@ export const AuthProvider = ({ children }) => {
               if (profile) {
                 const nextUser = { ...profile, authenticated: true };
                 setUser(nextUser);
+                try { sessionStorage.setItem("user_info", JSON.stringify(nextUser)); } catch (_) {}
                 try { localStorage.setItem("user_info", JSON.stringify(nextUser)); } catch (_) {}
               }
             } catch (_) {}
@@ -93,6 +104,7 @@ export const AuthProvider = ({ children }) => {
         } catch (_) {}
       }
       setUser(enriched);
+      try { sessionStorage.setItem("user_info", JSON.stringify(enriched)); } catch (_) {}
       try { localStorage.setItem("user_info", JSON.stringify(enriched)); } catch (_) {}
       return;
     } catch (err) {
@@ -114,6 +126,7 @@ export const AuthProvider = ({ children }) => {
           if (profile) nextUser = { ...profile, authenticated: true };
         } catch (_) {}
         setUser(nextUser);
+        try { sessionStorage.setItem("user_info", JSON.stringify(nextUser)); } catch (_) {}
         try { localStorage.setItem("user_info", JSON.stringify(nextUser)); } catch (_) {}
         return;
       } catch (e) {
@@ -194,9 +207,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    localStorage.removeItem("user_info");
+    try { sessionStorage.removeItem("access_token"); } catch (_) {}
+    try { sessionStorage.removeItem("refresh_token"); } catch (_) {}
+    try { sessionStorage.removeItem("user_info"); } catch (_) {}
+    try { localStorage.removeItem("access_token"); } catch (_) {}
+    try { localStorage.removeItem("refresh_token"); } catch (_) {}
+    try { localStorage.removeItem("user_info"); } catch (_) {}
     delete api.defaults.headers.common["Authorization"];
     setUser(null);
     nav("/login");

@@ -25,14 +25,18 @@ const GradientPaper = styled(Paper)(({ theme }) => ({
   position: 'relative'
 }));
 
-const StyledRating = styled(Rating)({
+const StyledRating = styled(Rating)(({ theme }) => ({
   '& .MuiRating-iconFilled': {
-    color: '#ff6b35',
+    // Violet primary aligned with app gradients
+    color: theme.palette.mode === 'dark' ? '#a78bfa' : '#7c3aed',
   },
   '& .MuiRating-iconHover': {
-    color: '#ff8c66',
+    color: theme.palette.mode === 'dark' ? '#c4b5fd' : '#8b5cf6',
   },
-});
+  '& .MuiRating-iconEmpty': {
+    color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)',
+  },
+}));
 
 const GlassCard = styled(Card)(({ theme }) => ({
   background: 'var(--bg-subtle)',
@@ -221,36 +225,34 @@ const EvaluationForm = ({ videoResponse, onEvaluationSaved }) => {
   return (
     <GlassCard sx={{ p: 3, mb: 3, position: 'relative' }}>
       {videoResponse?.evaluations?.length > 0 && (
-        <Box 
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            background: 'linear-gradient(135deg, #ffd89b 0%, #19547b 100%)',
-            color: 'white',
-            p: 1.5,
-            textAlign: 'center',
-            borderRadius: '20px 20px 0 0'
-          }}
-        >
-          <Typography variant="subtitle2" fontWeight="600">
-            ✓ Vous avez déjà évalué cette réponse
-          </Typography>
-        </Box>
-      )}
+    <Box
+      sx={{
+        position: 'absolute',
+        top: 8,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 1,
+        px: 2,
+        py: 0.75,
+        borderRadius: '999px',
+        background: 'var(--gradient-violet)',
+        color: '#fff',
+        boxShadow: '0 6px 16px rgba(0,0,0,0.25)',
+        border: '1px solid rgba(255,255,255,0.35)'
+      }}
+    >
+      <CheckCircle fontSize="small" />
+      <Typography variant="body2" fontWeight={700} sx={{ letterSpacing: 0.2 }}>
+        Vous avez déjà évalué cette réponse
+      </Typography>
+    </Box>
+  )}
       
       <form onSubmit={handleSubmit}>
         <Grid container spacing={3} sx={{ mt: videoResponse?.evaluations?.length > 0 ? 4 : 0 }}>
-          <Grid item xs={12}>
-            <Box display="flex" alignItems="center" gap={1} mb={2}>
-              <Assessment sx={{ color: 'primary.main' }} />
-              <Typography variant="h6" fontWeight="600">
-                Évaluation de la réponse
-              </Typography>
-            </Box>
-            <Divider sx={{ my: 2 }} />
-          </Grid>
+
 
           <Grid item xs={12} md={6}>
             {[
@@ -319,9 +321,8 @@ const EvaluationForm = ({ videoResponse, onEvaluationSaved }) => {
                 }}
               />
             </Box>
-          </Grid>
 
-          <Grid item xs={12}>
+            {/* Moved here: average + Save button under Notes */}
             <Box p={2} sx={{
               background: 'var(--bg-subtle)',
               borderRadius: '16px'
@@ -540,93 +541,92 @@ const SessionDetail = () => {
 
       {activeTab === 0 ? (
         <Grid container spacing={3}>
-          {/* Main Content Column */}
+          {/* Main 2-column content: Video (left) and Evaluation (right) */}
           <Grid item xs={12} lg={8}>
-            {/* Video Player Card */}
-            <GlassCard>
-              <CardContent>
-                {currentResponse ? (
-                  <>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-                      <Box>
-                        <Typography variant="h6" fontWeight="600" gutterBottom>
-                          Question {currentResponseIndex + 1} sur {session.responses.length}
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: 'var(--text-primary)' }}>
-                          {currentResponse.question_text}
-                        </Typography>
-                      </Box>
-                      
-                      <Box display="flex" gap={1}>
-                        <NavigationButton 
-                          onClick={handlePrevResponse} 
-                          disabled={currentResponseIndex === 0}
-                        >
-                          <SkipPrevious />
-                        </NavigationButton>
-                        <NavigationButton 
-                          onClick={handleNextResponse} 
-                          disabled={currentResponseIndex === session.responses.length - 1}
-                        >
-                          <SkipNext />
-                        </NavigationButton>
-                      </Box>
-                    </Box>
-                    
-                    <Box mb={3}>
-                      <VideoPlayer 
-                        src={currentResponse.video_file || currentResponse.video_url} 
-                        autoPlay={false} 
-                        controls={true} 
-                      />
-                    </Box>
-                    
-                    <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
-                      <Chip
-                        icon={<PlayArrow />}
-                        label={`Durée: ${currentResponse.duration}s`}
-                        variant="outlined"
-                      />
-                      
-                      {currentResponse.evaluations?.length > 0 && (
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Chip
-                            icon={<CheckCircle />}
-                            label="Évalué"
-                            color="success"
-                            variant="filled"
-                          />
-                          <Typography variant="body2" sx={{ color: 'var(--text-primary)' }}>
-                            Par {currentResponse.evaluations[0].hiring_manager_name}
+            <Grid container spacing={3}>
+              {/* Left: Video */}
+              <Grid item xs={12} md={8}>
+                <GlassCard>
+                  <CardContent>
+                    {currentResponse ? (
+                      <>
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                          <Typography variant="h6" fontWeight="600" gutterBottom sx={{ mr: 2 }}>
+                            Question {currentResponseIndex + 1} sur {session.responses.length} — {currentResponse.question_text}
                           </Typography>
+                          <Box display="flex" gap={1}>
+                            <NavigationButton 
+                              onClick={handlePrevResponse} 
+                              disabled={currentResponseIndex === 0}
+                            >
+                              <SkipPrevious />
+                            </NavigationButton>
+                            <NavigationButton 
+                              onClick={handleNextResponse} 
+                              disabled={currentResponseIndex === session.responses.length - 1}
+                            >
+                              <SkipNext />
+                            </NavigationButton>
+                          </Box>
                         </Box>
-                      )}
-                    </Box>
-                  </>
-                ) : (
-                  <Box textAlign="center" py={6}>
-                    <VideoLibrary sx={{ fontSize: 60, color: 'var(--text-primary)', mb: 2 }} />
-                    <Typography variant="h6" sx={{ color: 'var(--text-primary)' }}>
-                      Aucune réponse disponible
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </GlassCard>
 
-            {/* Evaluation Form */}
-            {currentResponse && (session.status === 'cancelled' || session.status === 'expired') ? (
-              <GlassCard sx={{ p: 3, mb: 3 }}>
-                <Typography variant="body2" sx={{ color: 'var(--text-on-card)' }}>
-                  L'évaluation est désactivée pour cette session ({session.status}).
-                </Typography>
-              </GlassCard>
-            ) : currentResponse ? (
-              <EvaluationForm 
-                videoResponse={currentResponse} 
-                onEvaluationSaved={handleEvaluationSaved} 
-              />
-            ) : null}
+                        <Box mb={3}>
+                          <VideoPlayer 
+                            src={currentResponse.video_file || currentResponse.video_url} 
+                            autoPlay={false} 
+                            controls={true} 
+                          />
+                        </Box>
+
+                        <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+                          <Chip
+                            icon={<PlayArrow />}
+                            label={`Durée: ${currentResponse.duration}s`}
+                            variant="outlined"
+                          />
+                          {currentResponse.evaluations?.length > 0 && (
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <Chip
+                                icon={<CheckCircle />}
+                                label="Évalué"
+                                color="success"
+                                variant="filled"
+                              />
+                              <Typography variant="body2" sx={{ color: 'var(--text-primary)' }}>
+                                Par {currentResponse.evaluations[0].hiring_manager_name}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      </>
+                    ) : (
+                      <Box textAlign="center" py={6}>
+                        <VideoLibrary sx={{ fontSize: 60, color: 'var(--text-primary)', mb: 2 }} />
+                        <Typography variant="h6" sx={{ color: 'var(--text-primary)' }}>
+                          Aucune réponse disponible
+                        </Typography>
+                      </Box>
+                    )}
+                  </CardContent>
+                </GlassCard>
+              </Grid>
+
+              {/* Right: Evaluation form (reduced width) */}
+              <Grid item xs={12} md={4}>
+                {currentResponse && (session.status === 'cancelled' || session.status === 'expired') ? (
+                  <GlassCard sx={{ p: 3, mb: 3 }}>
+                    <Typography variant="body2" sx={{ color: 'var(--text-on-card)' }}>
+                      L'évaluation est désactivée pour cette session ({session.status}).
+                    </Typography>
+                  </GlassCard>
+                ) : currentResponse ? (
+                  <EvaluationForm 
+                    videoResponse={currentResponse} 
+                    onEvaluationSaved={handleEvaluationSaved} 
+                  />
+                ) : null}
+              </Grid>
+            </Grid>
           </Grid>
 
           {/* Sidebar Column */}
@@ -686,69 +686,6 @@ const SessionDetail = () => {
                     </Button>
                   </Box>
                 )}
-              </CardContent>
-            </GlassCard>
-
-            {/* Navigation Card */}
-            <GlassCard>
-              <CardContent>
-                <Typography variant="h6" fontWeight="600" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'var(--text-on-card)' }}>
-                  <Notes /> Navigation Rapide
-                </Typography>
-                
-                <Box sx={{ maxHeight: '400px', overflowY: 'auto' }}>
-                  {session.responses?.map((response, index) => (
-                    <Box 
-                      key={response.id}
-                      onClick={() => setCurrentResponseIndex(index)}
-                      sx={{
-                        p: 2,
-                        mb: 1,
-                        borderRadius: '12px',
-                        cursor: 'pointer',
-                        background: currentResponseIndex === index ? 
-                          'var(--gradient-violet)' : 
-                          'rgba(255,255,255,0.06)',
-                        color: currentResponseIndex === index ? 'white' : 'var(--text-on-card)',
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          transform: 'translateX(4px)',
-                          background: currentResponseIndex === index ? 
-                            'var(--gradient-violet-strong)' : 
-                            'rgba(255,255,255,0.08)',
-                        }
-                      }}
-                    >
-                      <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Typography variant="subtitle2" fontWeight="500">
-                          Question {index + 1}
-                        </Typography>
-                        {response.evaluations?.length > 0 ? (
-                          <Chip
-                            icon={<CheckCircle />}
-                            label="Évalué"
-                            size="small"
-                            color="success"
-                            sx={{ 
-                              color: currentResponseIndex === index ? 'white' : 'inherit',
-                              backgroundColor: currentResponseIndex === index ? 'rgba(255, 255, 255, 0.2)' : 'success.light'
-                            }}
-                          />
-                        ) : (
-                          <Chip
-                            label="Non évalué"
-                            size="small"
-                            color="default"
-                            sx={{ 
-                              color: currentResponseIndex === index ? 'white' : 'inherit',
-                              backgroundColor: currentResponseIndex === index ? 'rgba(255, 255, 255, 0.2)' : 'grey.100'
-                            }}
-                          />
-                        )}
-                      </Box>
-                    </Box>
-                  ))}
-                </Box>
               </CardContent>
             </GlassCard>
           </Grid>

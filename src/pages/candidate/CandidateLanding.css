@@ -524,24 +524,7 @@ body {
 .dark .question-text p { color: #f5f6f7; }
 
 /* Centered warning overlay when multiple faces are detected */
-.multi-face-warning {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  max-width: min(92%, 680px);
-  text-align: center;
-  background: rgba(220,53,69,0.92);
-  color: #fff;
-  padding: .75rem 1rem;
-  border-radius: .5rem;
-  border: 1px solid rgba(255,255,255,0.25);
-  font-weight: 700;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-  pointer-events: none;
-  z-index: 3;
-}
-.dark .multi-face-warning { background: rgba(220,53,69,0.85); border-color: rgba(255,255,255,0.2); }
+/* Multi-face detection UI removed */
 
 h1, h2, h3, h4, h5, h6 {
   font-weight: 600;

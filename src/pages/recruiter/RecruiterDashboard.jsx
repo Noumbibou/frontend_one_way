@@ -23,6 +23,7 @@ export default function RecruiterDashboard() {
   const [showInvite, setShowInvite] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
   const [toast, setToast] = useState(null); // { message }
+  const [derivedAvgCompletion, setDerivedAvgCompletion] = useState(null);
 
   const showToast = (message) => {
     setToast({ message });
@@ -47,6 +48,35 @@ export default function RecruiterDashboard() {
 
     fetchDashboardData();
   }, []);
+
+  // Fallback: compute completion from sessions if backend metric is 0/absent
+  useEffect(() => {
+    const computeFromSessions = async () => {
+      try {
+        const res = await api.get("sessions/");
+        const list = Array.isArray(res.data) ? res.data : (res.data.results || []);
+        if (!Array.isArray(list) || list.length === 0) {
+          setDerivedAvgCompletion(0);
+          return;
+        }
+        const values = list.map(s => {
+          const answered = Number(s.answered_questions ?? s.answers_count ?? 0);
+          const total = Number(s.total_questions ?? s.questions_count ?? 0);
+          return total > 0 ? (answered / total) * 100 : null;
+        }).filter(v => v !== null);
+        const avg = values.length ? Math.round(values.reduce((a,b)=>a+b,0) / values.length) : 0;
+        setDerivedAvgCompletion(avg);
+      } catch (e) {
+        console.warn("Impossible de calculer le taux de complétion depuis les sessions", e);
+        setDerivedAvgCompletion(null);
+      }
+    };
+
+    // Only compute if missing or zero
+    if (!metrics || !metrics.avg_completion_rate || Number(metrics.avg_completion_rate) === 0) {
+      computeFromSessions();
+    }
+  }, [metrics]);
 
   useEffect(() => {
     if (location.state?.success) {
@@ -153,7 +183,9 @@ export default function RecruiterDashboard() {
               </div>
               <div className="metric-card">
                 <div className="metric-value">
-                  {metrics.avg_completion_rate || 0}%
+                  {metrics?.avg_completion_rate && Number(metrics.avg_completion_rate) > 0
+                    ? Math.round(metrics.avg_completion_rate)
+                    : (derivedAvgCompletion ?? 0)}%
                 </div>
                 <div className="metric-label">Taux de Complétion</div>
               </div>

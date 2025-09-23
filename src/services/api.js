@@ -27,7 +27,8 @@ const processQueue = (error, token = null) => {
 // Gestion des tokens d'authentification
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('access_token');
+    const token = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('access_token'))
+      || (typeof localStorage !== 'undefined' && localStorage.getItem('access_token'));
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -95,11 +96,14 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = localStorage.getItem('refresh_token');
+        const refreshToken = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('refresh_token'))
+          || (typeof localStorage !== 'undefined' && localStorage.getItem('refresh_token'));
         if (!refreshToken) {
           // Déconnexion si pas de refresh token
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
+          try { sessionStorage.removeItem('access_token'); } catch (_) {}
+          try { sessionStorage.removeItem('refresh_token'); } catch (_) {}
+          try { localStorage.removeItem('access_token'); } catch (_) {}
+          try { localStorage.removeItem('refresh_token'); } catch (_) {}
           window.location.href = '/login';
           return Promise.reject(error);
         }
@@ -112,7 +116,8 @@ api.interceptors.response.use(
         );
 
         const { access } = response.data;
-        localStorage.setItem('access_token', access);
+        try { sessionStorage.setItem('access_token', access); } catch (_) {}
+        try { localStorage.setItem('access_token', access); } catch (_) {}
         
         // Mettre à jour l'en-tête d'autorisation
         api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
@@ -126,8 +131,10 @@ api.interceptors.response.use(
       } catch (refreshError) {
         // En cas d'échec du rafraîchissement, déconnecter l'utilisateur
         console.error('[API] Failed to refresh token:', refreshError);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+        try { sessionStorage.removeItem('access_token'); } catch (_) {}
+        try { sessionStorage.removeItem('refresh_token'); } catch (_) {}
+        try { localStorage.removeItem('access_token'); } catch (_) {}
+        try { localStorage.removeItem('refresh_token'); } catch (_) {}
         window.location.href = '/login';
         processQueue(refreshError, null);
         return Promise.reject(refreshError);

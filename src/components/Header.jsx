@@ -4,7 +4,16 @@ import { useNavigate, useLocation } from "react-router-dom";
 import "./Header.css";
 import { useThemeApp } from "../contexts/ThemeContext";
 
-export default function Header({ title, children, showUser = true, showNavigation = false }) {
+export default function Header({
+  title,
+  children,
+  showUser = true,
+  showNavigation = false,
+  navItems,
+  showNewButton = true,
+  newButtonLabel = 'Nouvelle campagne',
+  onNewClick,
+}) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -19,11 +28,12 @@ export default function Header({ title, children, showUser = true, showNavigatio
     return location.pathname === path;
   };
 
-  const navigationItems = [
+  const defaultNavigationItems = [
     { path: "/recruiter/dashboard", label: "Tableau de bord", icon: "📊" },
     { path: "/recruiter/campaigns", label: "Campagnes", icon: "🎯" },
     { path: "/recruiter/sessions", label: "Sessions", icon: "🎥" }
   ];
+  const navigationItems = Array.isArray(navItems) && navItems.length ? navItems : defaultNavigationItems;
 
   return (
     <header className="header">
@@ -71,13 +81,13 @@ export default function Header({ title, children, showUser = true, showNavigatio
             <span className="header__nav-label">{mode === 'dark' ? 'Clair' : 'Sombre'}</span>
           </button>
           {/* Bouton "Nouvelle campagne" — utilise les classes de navigation pour conserver le design */}
-          {showNavigation && (
+          {showNavigation && showNewButton && (
             <button
               className="header__nav-item header__new-campaign"
-              onClick={() => navigate("/recruiter/campaigns/create")}
+              onClick={onNewClick ? onNewClick : () => navigate("/recruiter/campaigns/create")}
             >
               <span className="header__nav-icon">➕</span>
-              <span className="header__nav-label">Nouvelle campagne</span>
+              <span className="header__nav-label">{newButtonLabel}</span>
             </button>
           )}
 

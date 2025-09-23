@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import "./App.css";
@@ -15,6 +15,9 @@ import CampaignDetail from "./pages/recruiter/CampaignDetail";
 import SessionDetail from "./pages/recruiter/SessionDetail";
 import SessionList from "./pages/recruiter/SessionList";
 import CandidateLanding from "./pages/candidate/CandidateLanding";
+import CandidateDashboard from "./pages/candidate/CandidateDashboard";
+import CandidateInterviewDetail from "./pages/candidate/CandidateInterviewDetail";
+import CandidateLayout from "./pages/candidate/CandidateLayout";
 import { AuthProvider } from "./contexts/AuthContext";
 import PrivateRoute from "./components/PrivateRoute";
 import Analytics from "./pages/recruiter/Analytics";
@@ -26,6 +29,11 @@ function ThemedRoutes() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Routes>
+        {/* Auth aliases to support /auth/* URLs */}
+        <Route path="/auth/login" element={<Login />} />
+        <Route path="/auth/register" element={<Register />} />
+        <Route path="/auth/*" element={<Navigate to="/login" replace />} />
+
         <Route path="/" element={<Navigate to="/recruiter/dashboard" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -49,6 +57,17 @@ function ThemedRoutes() {
         </Route>
 
         <Route path="/session/:accessToken" element={<CandidateLanding />} />
+        <Route
+          path="/candidate"
+          element={
+            <PrivateRoute role="candidate">
+              <CandidateLayout />
+            </PrivateRoute>
+          }
+        >
+          <Route path="dashboard" element={<CandidateDashboard />} />
+          <Route path="interviews/:id" element={<CandidateInterviewDetail />} />
+        </Route>
       </Routes>
     </ThemeProvider>
   );

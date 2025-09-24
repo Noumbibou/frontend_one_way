@@ -116,9 +116,12 @@ export default function InviteModal({ campaignId, onClose }) {
     const lines = buildEmailLines(campaign, link, form.first_name);
     const body = encodeURIComponent(lines.join("\n"));
     const to = encodeURIComponent(form.email || "");
-    // Open Gmail compose in a new tab. If user has multiple accounts, they can switch.
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subject}&body=${body}`;
-    window.open(gmailUrl, "_blank", "noopener,noreferrer");
+    // Build Gmail compose URL
+    const composeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subject}&body=${body}`;
+    // If the user isn't logged in, going to mail.google.com may lose the compose params after login.
+    // Use AccountChooser with 'continue' to force redirect to compose after authentication.
+    const chooser = `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(composeUrl)}&service=mail`;
+    window.open(chooser, "_blank", "noopener,noreferrer");
   };
 
   const copyTextEmail = async () => {

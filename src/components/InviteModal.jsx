@@ -110,6 +110,17 @@ export default function InviteModal({ campaignId, onClose }) {
     window.location.href = `mailto:${form.email || ""}?subject=${subject}&body=${body}`;
   };
 
+  const sendViaGmail = () => {
+    if (!link) return;
+    const subject = encodeURIComponent(buildEmailSubject(campaign));
+    const lines = buildEmailLines(campaign, link, form.first_name);
+    const body = encodeURIComponent(lines.join("\n"));
+    const to = encodeURIComponent(form.email || "");
+    // Open Gmail compose in a new tab. If user has multiple accounts, they can switch.
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subject}&body=${body}`;
+    window.open(gmailUrl, "_blank", "noopener,noreferrer");
+  };
+
   const copyTextEmail = async () => {
     if (!link) return;
     const lines = buildEmailLines(campaign, link, form.first_name);
@@ -168,7 +179,8 @@ export default function InviteModal({ campaignId, onClose }) {
             <div className="modal-actions">
               <button className="btn" onClick={() => { try { navigator.clipboard.writeText(link); } catch(_){} }}>Copier le lien</button>
               <button className="btn" onClick={copyTextEmail}>Copier le texte</button>
-              <button className="btn btn-primary" onClick={sendEmail}>Ouvrir dans le client e‑mail</button>
+              <button className="btn btn-primary" onClick={sendViaGmail}>Ouvrir dans Gmail</button>
+              <button className="btn" onClick={sendEmail}>Ouvrir dans le client e‑mail</button>
               <button className="btn btn-ghost" onClick={copyHtmlEmail} title="Copier une version HTML stylée de l'e‑mail">Copier l'email HTML</button>
               <button onClick={() => onClose(link)}>Fermer</button>
             </div>

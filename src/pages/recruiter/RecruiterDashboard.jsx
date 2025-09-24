@@ -181,14 +181,6 @@ export default function RecruiterDashboard() {
                 </div>
                 <div className="metric-label">Entretiens Complétés</div>
               </div>
-              <div className="metric-card">
-                <div className="metric-value">
-                  {metrics?.avg_completion_rate && Number(metrics.avg_completion_rate) > 0
-                    ? Math.round(metrics.avg_completion_rate)
-                    : (derivedAvgCompletion ?? 0)}%
-                </div>
-                <div className="metric-label">Taux de Complétion</div>
-              </div>
             </div>
           </section>
         )}

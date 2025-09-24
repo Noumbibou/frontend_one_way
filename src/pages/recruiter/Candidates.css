@@ -1,0 +1,38 @@
+.cands-container{padding:24px;background:var(--bg-body);color:var(--text-primary)}
+.cands-header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+.page-title{margin:0;color:var(--text-primary)}
+.page-subtitle{margin:4px 0 0;color:var(--text-on-card)}
+.cands-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.cand-card{background:var(--bg-subtle);border:1px solid var(--border-color);border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,0.25)}
+.cand-card .card-body{padding:16px}
+.cand-main{display:flex;gap:12px;align-items:center}
+.cand-avatar{background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#0f172a}
+.cand-info{display:flex;flex-direction:column}
+.cand-name{font-weight:600}
+.cand-email,.cand-phone{font-size:.9rem;color:var(--text-on-card)}
+.cand-links{margin-top:8px}
+.link-soft{color:#a78bfa;text-decoration:none}
+.link-soft:hover{text-decoration:underline}
+.empty-state{background:var(--bg-subtle);border:1px solid var(--border-color);border-radius:16px;color:var(--text-on-card)}
+.error-card{background:var(--bg-subtle);border:1px solid var(--border-color);border-radius:16px}
+
+/* Actions bar (search + buttons) */
+.cands-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.search-box{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border-color);border-radius:12px;background:rgba(255,255,255,0.04);min-width:260px}
+.search-box:focus-within{border-color:#a78bfa;box-shadow:0 0 0 3px rgba(167,139,250,0.25)}
+.search-icon{font-size:14px;color:var(--text-on-card)}
+.search-box input{border:none;outline:none;background:transparent;color:var(--text-primary);width:240px}
+.cands-count{margin:8px 0 16px;color:var(--text-on-card)}
+
+/* Pills and actions */
+.pill{display:inline-block;padding:4px 10px;border-radius:999px;background:rgba(167,139,250,0.12);color:#a78bfa;font-size:.8rem;margin-right:6px;margin-top:6px}
+.cand-stats{margin-top:10px}
+.cand-actions{display:flex;gap:8px;margin-top:12px}
+.btn{border:1px solid var(--border-color);background:var(--bg-subtle);color:var(--text-primary);padding:8px 12px;border-radius:10px;cursor:pointer}
+.btn:hover{filter:brightness(1.1)}
+.btn-primary{background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#0f172a;border:none}
+
+@media (max-width: 600px){
+  .search-box{min-width:unset;width:100%}
+  .search-box input{width:100%}
+}

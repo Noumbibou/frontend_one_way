@@ -16,6 +16,7 @@ export default function Register() {
   const [candidateFirstName, setCandidateFirstName] = useState("");
   const [candidateLastName, setCandidateLastName] = useState("");
   const [candidatePhone, setCandidatePhone] = useState("");
+  const [candidateLinkedIn, setCandidateLinkedIn] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState(null);
@@ -78,6 +79,7 @@ export default function Register() {
           first_name: candidateFirstName,
           last_name: candidateLastName,
           phone: candidatePhone,
+          linkedin_url: candidateLinkedIn,
           extra: {},
         });
       }
@@ -179,6 +181,10 @@ export default function Register() {
                 <div className="form-row">
                   <label>Téléphone</label>
                   <input value={candidatePhone} onChange={(e) => setCandidatePhone(e.target.value)} placeholder="+33 6 12 34 56 78" />
+                </div>
+                <div className="form-row">
+                  <label>LinkedIn</label>
+                  <input value={candidateLinkedIn} onChange={(e) => setCandidateLinkedIn(e.target.value)} placeholder="https://www.linkedin.com/in/votre-profil" />
                 </div>
               </>
             )}

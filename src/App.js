@@ -12,6 +12,7 @@ import RecruiterDashboard from "./pages/recruiter/RecruiterDashboard";
 import CreateCampaign from "./pages/recruiter/CreateCampaign";
 import CampaignList from "./pages/recruiter/CampaignList";
 import CampaignDetail from "./pages/recruiter/CampaignDetail";
+import Candidates from "./pages/recruiter/Candidates";
 import SessionDetail from "./pages/recruiter/SessionDetail";
 import SessionList from "./pages/recruiter/SessionList";
 import CandidateLanding from "./pages/candidate/CandidateLanding";
@@ -54,6 +55,7 @@ function ThemedRoutes() {
           <Route path="sessions" element={<SessionList />} />
           <Route path="sessions/:id" element={<SessionDetail />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="candidates" element={<Candidates />} />
         </Route>
 
         <Route path="/session/:accessToken" element={<CandidateLanding />} />

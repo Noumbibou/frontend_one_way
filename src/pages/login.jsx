@@ -92,7 +92,7 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="login-form">
             <div className="form-group">
               <label htmlFor="identifier" className="form-label">
-                Email ou identifiant
+                Email
               </label>
               <input
                 id="identifier"
@@ -155,36 +155,7 @@ export default function Login() {
                 "Se connecter"
               )}
             </button>
-
-            <div className="login-divider">
-              <span>ou</span>
-            </div>
-
-            {/* Demo accounts */}
-            <div className="demo-accounts">
-              <p className="demo-title">Comptes de démonstration :</p>
-              <div className="demo-buttons">
-                <button
-                  type="button"
-                  className="demo-button demo-recruiter"
-                  onClick={() => handleDemoLogin("recruiter")}
-                  disabled={isLoading}
-                >
-                  <span className="demo-icon">👔</span>
-                  Recruteur Demo
-                </button>
-                <button
-                  type="button"
-                  className="demo-button demo-candidate"
-                  onClick={() => handleDemoLogin("candidate")}
-                  disabled={isLoading}
-                >
-                  <span className="demo-icon">🎓</span>
-                  Candidat Demo
-                </button>
-              </div>
-            </div>
-
+            
             <div className="login-links">
               <Link to="/forgot-password" className="login-link">
                 Mot de passe oublié ?

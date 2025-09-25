@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { 
   Box, 
   Typography, 
@@ -150,7 +150,18 @@ export default function CampaignForm({ initial = {}, onSubmit, submitting, onSte
   const [responseTimeLimit, setResponseTimeLimit] = useState(initial.response_time_limit ?? 120);
   const [maxQuestions, setMaxQuestions] = useState(initial.max_questions ?? 5);
   const [allowRetry, setAllowRetry] = useState(initial.allow_retry ?? false);
-  const [startDate, setStartDate] = useState(initial.start_date || "");
+  const toLocalInput = (d) => {
+    // format as YYYY-MM-DDTHH:MM for input[type=datetime-local]
+    const pad = (n) => String(n).padStart(2, '0');
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const hour = pad(d.getHours());
+    const minute = pad(d.getMinutes());
+    return `${year}-${month}-${day}T${hour}:${minute}`;
+  };
+  const nowLocalStr = useMemo(() => toLocalInput(new Date()), []);
+  const [startDate, setStartDate] = useState(initial.start_date || nowLocalStr);
   const [endDate, setEndDate] = useState(initial.end_date || "");
   const [questions, setQuestions] = useState(
     initial.questions && initial.questions.length
@@ -203,6 +214,14 @@ export default function CampaignForm({ initial = {}, onSubmit, submitting, onSte
     if (!(num(maxQuestions) >= 1)) missing.push("Nombre maximum de questions (>= 1)");
 
     // Date logic
+    // start >= now
+    if (startDate) {
+      const s = new Date(startDate);
+      const now = new Date();
+      if (isNaN(s.getTime()) || s < now) {
+        missing.push("La date de début doit être postérieure à maintenant");
+      }
+    }
     if (startDate && endDate) {
       const s = new Date(startDate);
       const e = new Date(endDate);
@@ -411,6 +430,7 @@ export default function CampaignForm({ initial = {}, onSubmit, submitting, onSte
                         <CalendarIcon color="primary" />
                       </InputAdornment>
                     ),
+                    inputProps: { min: nowLocalStr },
                   }}
                 />
               </Grid>
@@ -430,6 +450,7 @@ export default function CampaignForm({ initial = {}, onSubmit, submitting, onSte
                         <CalendarIcon color="primary" />
                       </InputAdornment>
                     ),
+                    inputProps: { min: startDate || nowLocalStr },
                   }}
                 />
               </Grid>

@@ -1,70 +1,86 @@
-# Getting Started with Create React App
+# Frontend One Way - README
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## Aperçu
 
-## Available Scripts
+Application React (MUI + React Router) pour gérer:
+- Authentification (login/register) avec le backend Django.
+- Espace recruteur: Dashboard, Campagnes, Sessions, Candidats, Analytics.
+- Espace candidat: Dashboard, Détails d’entretien (questions/réponses/évaluations).
 
-In the project directory, you can run:
+Structure clé:
+- `src/pages/` pages par rôle (`recruiter/`, `candidate/`).
+- `src/components/` composants UI (formulaires, modales, etc.).
+- `src/services/` appels API (Axios instance `api.js`).
+- `src/contexts/` contextes (Auth, Theme).
 
-### `npm start`
+## Prérequis
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- Node 18+
+- npm ou yarn
+- Backend lancé sur `http://localhost:8000` (modifiable via env Axios)
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Installation
 
-### `npm test`
+```bash
+npm install
+# ou
+yarn
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Scripts
 
-### `npm run build`
+- `npm start` démarre en mode dev (sur `http://localhost:3000` ou `http://localhost:5173`).
+- `npm run build` build production.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Configuration API
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Axios est configuré dans `src/services/api.js` (baseURL relative `'/api/'` si reverse-proxy, sinon `http://localhost:8000/api/`).
+Assurez-vous que le CORS côté backend autorise l’origin du frontend.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Routage principal (`src/App.js`)
 
-### `npm run eject`
+- `/auth/login`, `/auth/register` alias.
+- `/recruiter/*` (protégé, rôle hiring_manager):
+  - `/recruiter/dashboard` Dashboard recruteur
+  - `/recruiter/campaigns` Liste des campagnes
+  - `/recruiter/campaigns/create` Création de campagne
+  - `/recruiter/campaigns/:id` Détails campagne
+  - `/recruiter/sessions` Sessions
+  - `/recruiter/sessions/:id` Détail session
+  - `/recruiter/candidates` Pool de talents (candidats invités par le recruteur connecté)
+  - `/recruiter/analytics` Analytics
+- `/candidate/*` (protégé, rôle candidate):
+  - `/candidate/dashboard`
+  - `/candidate/interviews/:id`
+- `/session/:accessToken` Landing interview candidat (lien d’invitation)
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Pages clés
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+- `pages/recruiter/CreateCampaign.jsx` + `components/CampaignForm.jsx`:
+  - Date de début par défaut = maintenant, `min` imposé sur inputs, validation frontend + backend.
+- `pages/recruiter/Candidates.jsx`:
+  - Liste des candidats filtrée par les campagnes du recruteur.
+  - Recherche, stats (sessions/réponses/dernière invitation), ré-invitation, export CSV.
+- `components/InviteModal.jsx`:
+  - Ouverture Gmail Web compose forcée via AccountChooser + `continue`.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## Auth / Register
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+`contexts/AuthContext.jsx` gère les appels `login`, `register`, et stocke l’utilisateur/tokens.
+Le register côté candidat envoie: `{ role: 'candidate', email, password, first_name, last_name, phone, linkedin_url }`.
+Le backend accepte `role` ou `user_type`.
 
-## Learn More
+## Développement
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+- Thème: `contexts/ThemeContext`, styles globaux dans `src/styles/`.
+- Composants MUI: respect de la dark mode et glass UI.
+- Pour ajouter une page:
+  1. Créez `src/pages/...`
+  2. Ajoutez la route dans `src/App.js`
+  3. Ajoutez services si nécessaire dans `src/services/`
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Dépannage
 
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- CORS: configurez `CORS_ALLOWED_ORIGINS` côté backend.
+- 401: vérifiez les tokens dans le `AuthContext` et le header Authorization.
+- Gmail compose: autoriser les popups si bloqués par le navigateur.

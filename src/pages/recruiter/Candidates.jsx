@@ -19,6 +19,7 @@ export default function Candidates() {
   const [campaigns, setCampaigns] = useState([]);
   const [campaignId, setCampaignId] = useState("");
   const [inviting, setInviting] = useState(false);
+  const [inviteResult, setInviteResult] = useState(null); // {link, expires_at}
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -119,16 +120,19 @@ export default function Candidates() {
     if (!inviteTarget || !campaignId) return;
     setInviting(true);
     try {
-      await inviteCandidate(campaignId, {
+      const res = await inviteCandidate(campaignId, {
         email: inviteTarget.email,
         first_name: inviteTarget.first_name,
         last_name: inviteTarget.last_name,
         phone: inviteTarget.phone,
         linkedin_url: inviteTarget.linkedin_url,
       });
-      closeInvite();
-      // optional: navigate to sessions filtered by this candidate
-      navigate(`/recruiter/sessions?candidate_email=${encodeURIComponent(inviteTarget.email)}`);
+      const token = res?.access_token || res?.session?.access_token || res?.id;
+      if (token) {
+        const link = `${window.location.origin}/session/${token}`;
+        try { await navigator.clipboard.writeText(link); } catch(_) {}
+        setInviteResult({ link, expires_at: res?.expires_at || res?.session?.expires_at || null });
+      }
     } catch (e) {
       alert(typeof e?.response?.data === 'string' ? e.response.data : 'Erreur lors de l\'invitation');
     } finally {
@@ -222,22 +226,73 @@ export default function Candidates() {
       <Dialog open={inviteOpen} onClose={closeInvite} fullWidth maxWidth="sm">
         <DialogTitle>Inviter le candidat</DialogTitle>
         <DialogContent>
-          <div className="invite-form">
-            <div className="invite-row"><strong>Email:</strong> {inviteTarget?.email}</div>
-            <div className="invite-row"><strong>Nom:</strong> {(inviteTarget?.first_name || "") + " " + (inviteTarget?.last_name || "")}</div>
-            <FormControl fullWidth size="small" sx={{ mt: 2 }}>
-              <InputLabel id="camp-select">Campagne</InputLabel>
-              <Select labelId="camp-select" label="Campagne" value={campaignId} onChange={(e)=>setCampaignId(e.target.value)}>
-                {campaigns.map(c => (
-                  <MenuItem key={c.id} value={c.id}>{c.title || `#${c.id}`}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </div>
+          {!inviteResult ? (
+            <div className="invite-form">
+              <div className="invite-row"><strong>Email:</strong> {inviteTarget?.email}</div>
+              <div className="invite-row"><strong>Nom:</strong> {(inviteTarget?.first_name || "") + " " + (inviteTarget?.last_name || "")}</div>
+              <FormControl fullWidth size="small" sx={{ mt: 2 }}>
+                <InputLabel id="camp-select">Campagne</InputLabel>
+                <Select labelId="camp-select" label="Campagne" value={campaignId} onChange={(e)=>{ setCampaignId(e.target.value); setInviteResult(null); }}>
+                  {campaigns.map(c => (
+                    <MenuItem key={c.id} value={c.id}>{c.title || `#${c.id}`}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </div>
+          ) : (
+            <div className="invite-summary">
+              <div className="invite-row"><strong>Lien généré:</strong> <a href={inviteResult.link} target="_blank" rel="noreferrer">{inviteResult.link}</a></div>
+              {inviteResult.expires_at && (
+                <div className="invite-row"><strong>Expire:</strong> {new Date(inviteResult.expires_at).toLocaleString()}</div>
+              )}
+              <div className="email-preview" style={{marginTop: 12}}>
+                {(() => {
+                  const camp = campaigns.find(c => String(c.id) === String(campaignId));
+                  const subject = `Invitation à un entretien vidéo - ${camp?.title || 'Campagne'}`;
+                  const start = camp?.start_date ? new Date(camp.start_date).toLocaleString() : null;
+                  const end = camp?.end_date ? new Date(camp.end_date).toLocaleString() : null;
+                  const lines = [
+                    inviteTarget?.first_name ? `Bonjour ${inviteTarget.first_name},` : 'Bonjour,',
+                    '',
+                    `Vous êtes invité(e) à participer à un entretien vidéo pour la campagne : ${camp?.title || 'Campagne'}.`,
+                    camp?.description ? '' : null,
+                    camp?.description ? `Description : ${camp.description}` : null,
+                    (start || end) ? '' : null,
+                    (start || end) ? `Période : ${start ? `Début ${start}` : ''}${start && end ? ' | ' : ''}${end ? `Fin ${end}` : ''}` : null,
+                    '',
+                    `Pour démarrer l'entretien, cliquez sur le lien suivant : ${inviteResult.link}`,
+                    '',
+                    'Cordialement,',
+                    "L'équipe de recrutement"
+                  ].filter(Boolean);
+                  const subjectEnc = encodeURIComponent(subject);
+                  const bodyEnc = encodeURIComponent(lines.join('\n'));
+                  const toEnc = encodeURIComponent(inviteTarget?.email || '');
+                  const composeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${toEnc}&su=${subjectEnc}&body=${bodyEnc}`;
+                  const chooser = `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(composeUrl)}&service=mail`;
+                  const mailto = `mailto:${inviteTarget?.email || ''}?subject=${subjectEnc}&body=${bodyEnc}`;
+                  return (
+                    <div>
+                      <div className="email-preview__row"><strong>À:</strong> {inviteTarget?.email}</div>
+                      <div className="email-preview__row"><strong>Objet:</strong> {subject}</div>
+                      <div className="email-preview__body" style={{whiteSpace:'pre-wrap', marginTop: 8}}>{lines.join('\n')}</div>
+                      <div className="cand-actions" style={{marginTop: 12, display:'flex', gap:8, flexWrap:'wrap'}}>
+                        <button className="btn" onClick={() => { try { navigator.clipboard.writeText(inviteResult.link); } catch(_){} }}>Copier le lien</button>
+                        <button className="btn btn-primary" onClick={() => window.open(chooser, '_blank', 'noopener,noreferrer')}>Ouvrir dans Gmail</button>
+                        <button className="btn" onClick={() => window.location.href = mailto}>Ouvrir le client e‑mail</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
         </DialogContent>
         <DialogActions>
-          <button className="btn" onClick={closeInvite}>Annuler</button>
-          <button className="btn btn-primary" onClick={submitInvite} disabled={!campaignId || inviting}>{inviting ? 'Envoi...' : 'Envoyer l\'invitation'}</button>
+          <button className="btn" onClick={closeInvite}>{inviteResult ? 'Fermer' : 'Annuler'}</button>
+          {!inviteResult && (
+            <button className="btn btn-primary" onClick={submitInvite} disabled={!campaignId || inviting}>{inviting ? 'Envoi...' : 'Envoyer l\'invitation'}</button>
+          )}
         </DialogActions>
       </Dialog>
     </div>

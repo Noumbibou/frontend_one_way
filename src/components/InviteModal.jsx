@@ -1,14 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { inviteCandidate, fetchCampaign } from "../services/campaigns";
+import { bulkInvite } from "../services/bulk";
 import "./InviteModal.css";
 
 export default function InviteModal({ campaignId, onClose }) {
+  const [mode, setMode] = useState("single"); // single | bulk
   const [form, setForm] = useState({ email: "", first_name: "", last_name: "", phone: "", linkedin_url: "" });
   const [loading, setLoading] = useState(false);
   const [link, setLink] = useState(null);
   const [meta, setMeta] = useState(null);
   const [error, setError] = useState(null);
   const [campaign, setCampaign] = useState(null);
+  // Bulk state
+  const [bulkText, setBulkText] = useState("");
+  const [bulkRes, setBulkRes] = useState(null); // {successes:[], errors:[]}
   
   // Helpers to build email contents (subject, text body, HTML body)
   const buildEmailSubject = (c) => `Invitation à un entretien vidéo - ${c?.title || "Campagne"}`;
@@ -64,6 +69,26 @@ export default function InviteModal({ campaignId, onClose }) {
     return res?.access_token || res?.session?.access_token || res?.session_access_token || res?.id || null;
   };
 
+  const parsedBulk = useMemo(() => {
+    const out = [];
+    const lines = (bulkText || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      // email, first_name, last_name[, phone][, linkedin_url]
+      const parts = line.split(/[,;\t]/).map(s => s.trim());
+      if (!parts.length) continue;
+      const [email, first_name = "", last_name = "", phone = "", linkedin_url = ""] = parts;
+      if (!email) continue;
+      out.push({ email, first_name, last_name, phone, linkedin_url });
+    }
+    return out;
+  }, [bulkText]);
+
+  const bulkNameByEmail = useMemo(() => {
+    const map = {};
+    parsedBulk.forEach(r => { if (r.email) map[r.email.toLowerCase()] = r.first_name || ""; });
+    return map;
+  }, [parsedBulk]);
+
   // Load campaign details to enrich email content
   useEffect(() => {
     let mounted = true;
@@ -84,18 +109,29 @@ export default function InviteModal({ campaignId, onClose }) {
     setError(null);
     setLoading(true);
     try {
-      const res = await inviteCandidate(campaignId, form);
-      const token = extractToken(res);
-      if (!token) {
-        setError("Réponse serveur : token manquant");
+      if (mode === "single") {
+        const res = await inviteCandidate(campaignId, form);
+        const token = extractToken(res);
+        if (!token) {
+          setError("Réponse serveur : token manquant");
+          setLoading(false);
+          return;
+        }
+        const generated = `${window.location.origin}/session/${token}`;
+        try { await navigator.clipboard.writeText(generated); } catch (_) {}
+        setLink(generated);
+        setMeta(res?.expires_at || res?.session?.expires_at || null);
         setLoading(false);
-        return;
+      } else {
+        if (!parsedBulk.length) {
+          setError("Aucun candidat détecté. Format: email,prenom,nom[,telephone][,linkedin]");
+          setLoading(false);
+          return;
+        }
+        const res = await bulkInvite(campaignId, { candidates: parsedBulk });
+        setBulkRes(res || { successes: [], errors: [] });
+        setLoading(false);
       }
-      const generated = `${window.location.origin}/session/${token}`;
-      try { await navigator.clipboard.writeText(generated); } catch (_) {}
-      setLink(generated);
-      setMeta(res?.expires_at || res?.session?.expires_at || null);
-      setLoading(false);
     } catch (err) {
       setError(err?.response?.data?.error || err?.response?.data || err?.message || "Erreur");
       setLoading(false);
@@ -120,6 +156,18 @@ export default function InviteModal({ campaignId, onClose }) {
     const composeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subject}&body=${body}`;
     // If the user isn't logged in, going to mail.google.com may lose the compose params after login.
     // Use AccountChooser with 'continue' to force redirect to compose after authentication.
+    const chooser = `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(composeUrl)}&service=mail`;
+    window.open(chooser, "_blank", "noopener,noreferrer");
+  };
+
+  const openGmailFor = (email, token, firstName = "") => {
+    if (!email || !token) return;
+    const url = `${window.location.origin}/session/${token}`;
+    const subject = encodeURIComponent(buildEmailSubject(campaign));
+    const lines = buildEmailLines(campaign, url, firstName);
+    const body = encodeURIComponent(lines.join("\n"));
+    const to = encodeURIComponent(email);
+    const composeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subject}&body=${body}`;
     const chooser = `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(composeUrl)}&service=mail`;
     window.open(chooser, "_blank", "noopener,noreferrer");
   };
@@ -150,9 +198,13 @@ export default function InviteModal({ campaignId, onClose }) {
     <div className="invite-modal-backdrop">
       <div className="invite-modal">
         <button className="modal-close" onClick={() => onClose(null)}>✕</button>
-        {!link ? (
+        {!link && mode === "single" ? (
           <form onSubmit={submit}>
             <h3>Inviter un candidat</h3>
+            <div className="mode-toggle" style={{marginBottom: 8}}>
+              <button type="button" className={`btn ${mode==='single'?'btn-primary':''}`} onClick={()=>{setMode('single'); setBulkRes(null);}}>Inviter 1</button>
+              <button type="button" className={`btn ${mode==='bulk'?'btn-primary':''}`} onClick={()=>{setMode('bulk'); setLink(null); setMeta(null);}}>Invitations multiples</button>
+            </div>
             <input required placeholder="Email" value={form.email} onChange={handle("email")} />
             <input placeholder="Prénom" value={form.first_name} onChange={handle("first_name")} />
             <input placeholder="Nom" value={form.last_name} onChange={handle("last_name")} />
@@ -163,6 +215,60 @@ export default function InviteModal({ campaignId, onClose }) {
               <button type="submit" disabled={loading}>{loading ? "Envoi..." : "Générer le lien"}</button>
               <button type="button" onClick={() => onClose(null)}>Annuler</button>
             </div>
+          </form>
+        ) : !link && mode === "bulk" ? (
+          <form onSubmit={submit}>
+            <h3>Invitations multiples</h3>
+            <div className="mode-toggle" style={{marginBottom: 8}}>
+              <button type="button" className={`btn ${mode==='single'?'btn-primary':''}`} onClick={()=>{setMode('single'); setBulkRes(null);}}>Inviter 1</button>
+              <button type="button" className={`btn ${mode==='bulk'?'btn-primary':''}`} onClick={()=>{setMode('bulk');}}>Invitations multiples</button>
+            </div>
+            <textarea rows={8} placeholder="email,prenom,nom[,telephone][,linkedin]\n..."
+              value={bulkText} onChange={(e)=>setBulkText(e.target.value)} />
+            <div className="hint">Prévus: {parsedBulk.length} candidat(s)</div>
+            {error && <div className="error">{typeof error === "string" ? error : JSON.stringify(error)}</div>}
+            <div className="modal-actions">
+              <button type="submit" disabled={loading}>{loading ? "Envoi..." : "Inviter"}</button>
+              <button type="button" onClick={() => onClose(null)}>Annuler</button>
+            </div>
+            {bulkRes && (
+              <div className="bulk-results" style={{marginTop: 12}}>
+                <h4>Résultats</h4>
+                {Array.isArray(bulkRes.successes) && bulkRes.successes.length > 0 && (
+                  <div className="bulk-success card" style={{padding: 8}}>
+                    <strong>Succès ({bulkRes.successes.length})</strong>
+                    <ul>
+                      {bulkRes.successes.map((s, i) => {
+                        const token = s?.access_token || s?.session?.access_token;
+                        const url = token ? `${window.location.origin}/session/${token}` : null;
+                        const firstName = bulkNameByEmail[(s.email || "").toLowerCase()] || "";
+                        return (
+                          <li key={i}>
+                            {s.email} {url && (
+                              <>
+                                — <a href={url} target="_blank" rel="noreferrer">lien</a>
+                                <button type="button" className="btn" style={{marginLeft: 6}} onClick={() => { try { navigator.clipboard.writeText(url); } catch(_){} }}>Copier</button>
+                                <button type="button" className="btn btn-primary" style={{marginLeft: 6}} onClick={() => openGmailFor(s.email, token, firstName)}>Gmail</button>
+                              </>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                {Array.isArray(bulkRes.errors) && bulkRes.errors.length > 0 && (
+                  <div className="bulk-errors card" style={{padding: 8, marginTop: 8}}>
+                    <strong>Erreurs ({bulkRes.errors.length})</strong>
+                    <ul>
+                      {bulkRes.errors.map((e, i) => (
+                        <li key={i}>{e?.payload?.email || `Ligne ${e?.index+1}`} — {e?.error || 'Erreur'}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
           </form>
         ) : (
           <div>

@@ -1,5 +1,25 @@
 # Frontend One Way - README
 
+## 🐳 Lancer avec Docker (recommandé)
+
+### Prérequis
+- Docker et Docker Compose installés
+- Le backend doit tourner sur `http://localhost:8000` (voir le repo [Backend_recordingVideo](https://github.com/Noumbibou/Backend_recordingVideo))
+
+### Démarrage
+
+1. Copier le fichier d'environnement d'exemple :
+```bash
+   cp .env.example .env
+```
+2. Lancer :
+```bash
+   docker compose up --build
+```
+3. Ouvrir `http://localhost:3000`
+
+---
+
 ## Aperçu
 
 Application React (MUI + React Router) pour gérer:
